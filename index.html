@@ -1,73 +1,100 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>NovaAPI</title>
+    <title>NovaAPI - Professional API Client</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+        
+        :root {
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --border-color: #334155;
+            --text-main: #f8fafc;
+            --accent: #3b82f6;
+        }
+
         body {
             margin: 0;
             padding: 0;
-            transition: background-color 0.3s ease;
-            padding-top: env(safe-area-inset-top);
-            padding-bottom: env(safe-area-inset-bottom);
-            padding-left: env(safe-area-inset-left);
-            padding-right: env(safe-area-inset-right);
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-main);
             overflow: hidden;
+            height: 100vh;
         }
+
+        .font-mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
         ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
+            width: 6px;
+            height: 6px;
         }
         ::-webkit-scrollbar-track {
-            background: transparent;
+            background: rgba(0,0,0,0.1);
         }
         ::-webkit-scrollbar-thumb {
             background: #475569;
-            border-radius: 4px;
+            border-radius: 10px;
         }
         ::-webkit-scrollbar-thumb:hover {
             background: #64748b;
         }
-        @keyframes slideIn {
-            from { transform: translateY(20px); opacity: 0; }
-            to { transform: translateY(0); opacity: 1; }
+
+        .no-select {
+            user-select: none;
         }
-        .animate-slide-in {
-            animation: slideIn 0.3s ease-out forwards;
+
+        #root {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
         }
-        .no-scrollbar::-webkit-scrollbar {
-            display: none;
+
+        /* Animations for UI feedback */
+        @keyframes pulse-subtle {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
         }
-        @media (max-width: 640px) {
-            button, select, input {
-                min-height: 44px;
-            }
+        .animate-pulse-subtle {
+            animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        
+        /* Tab transitions */
+        .tab-indicator {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .response-match {
+            background-color: rgba(59, 130, 246, 0.3);
+            border-radius: 2px;
+            padding: 0 2px;
         }
     </style>
-    <!-- Babel allows running TSX/JSX directly in the browser for static deployments -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Import Map for ESM usage in browser -->
     <script type="importmap">
 {
   "imports": {
     "react": "https://esm.sh/react@19.0.0",
     "react-dom": "https://esm.sh/react-dom@19.0.0",
     "react-dom/client": "https://esm.sh/react-dom@19.0.0/client",
-    "jszip": "https://esm.sh/jszip@3.10.1",
-    "fmt": "https://esm.sh/fmt@2.0.0",
     "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
     "react/": "https://esm.sh/react@^19.2.3/",
+    "jszip": "https://esm.sh/jszip@^3.10.1",
     "@capacitor/cli": "https://esm.sh/@capacitor/cli@^8.0.0"
   }
 }
 </script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 </head>
 <body>
     <div id="root"></div>
-    <!-- Load entry point with Babel processing for React and TypeScript support -->
-    <script type="text/babel" data-type="module" data-presets="react,typescript" src="index.tsx"></script>
+    <!-- Script error fix: Explicitly set data-type="module" for Babel to handle ES imports -->
+    <script type="text/babel" data-type="module" data-presets="typescript,react" src="index.tsx"></script>
 </body>
 </html>
