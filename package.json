@@ -1,0 +1,45 @@
+
+{
+  "name": "novaapi-vscode",
+  "displayName": "NovaAPI",
+  "description": "Advanced API client for VS Code",
+  "version": "1.5.0",
+  "publisher": "nova-tools",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Network",
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "novaapi.open",
+        "title": "NovaAPI: Open Dashboard",
+        "category": "NovaAPI"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "novaapi-explorer",
+          "title": "NovaAPI",
+          "icon": "$(radio-tower)"
+        }
+      ]
+    },
+    "views": {
+      "novaapi-explorer": [
+        {
+          "id": "novaapi.main",
+          "name": "NovaAPI Client",
+          "type": "webview"
+        }
+      ]
+    }
+  }
+}

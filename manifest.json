@@ -1,0 +1,24 @@
+
+{
+  "manifest_version": 3,
+  "name": "NovaAPI - Advanced API Client",
+  "version": "1.5.0",
+  "description": "Powerful REST/SOAP API client with advanced response filtering and code generation.",
+  "permissions": [
+    "storage",
+    "sidePanel"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "action": {
+    "default_popup": "index.html",
+    "default_title": "Open NovaAPI"
+  },
+  "side_panel": {
+    "default_path": "index.html"
+  },
+  "icons": {
+    "128": "https://cdn-icons-png.flaticon.com/512/807/807262.png"
+  }
+}
