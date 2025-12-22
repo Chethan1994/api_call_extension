@@ -9,6 +9,7 @@ import { DeploymentModal } from './components/DeploymentModal';
 import { ImportModal } from './components/ImportModal';
 import { SettingsModal } from './components/SettingsModal';
 import { AuthModal } from './components/AuthModal';
+import { AdminPage } from './components/AdminPage';
 import { generateLocalCode } from './utils/codeGenerator';
 
 const App: React.FC = () => {
@@ -40,11 +41,12 @@ const App: React.FC = () => {
   const [isEditingResponse, setIsEditingResponse] = useState(false);
   const [currentActionCode, setCurrentActionCode] = useState<string>('');
   
-  // Modals
+  // Modals & Navigation
   const [showDeployment, setShowDeployment] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
+  const [view, setView] = useState<'studio' | 'admin'>('studio');
 
   // New Domain State (Local Storage)
   const [environments, setEnvironments] = useState<Environment[]>(loadLocal('nova_envs', []));
@@ -60,6 +62,8 @@ const App: React.FC = () => {
   const activeEnv = useMemo(() => environments.find(e => e.id === activeEnvId), [environments, activeEnvId]);
   const isExtension = !!((window as any).chrome && (window as any).chrome.runtime && (window as any).chrome.runtime.id) || !!(window as any).acquireVsCodeApi;
   const [isCompact, setIsCompact] = useState(window.innerWidth < 500);
+
+  const isSuperUser = useMemo(() => user?.email === 'chethansg4@gmail.com' || user?.role === 'superadmin', [user]);
 
   useEffect(() => {
     const handleResize = () => setIsCompact(window.innerWidth < 500);
@@ -102,7 +106,6 @@ const App: React.FC = () => {
     const startTime = performance.now();
 
     try {
-      // Interpolate all inputs
       const interpolatedUrl = interpolate(config.url);
       const interpolatedBody = interpolate(config.body);
 
@@ -223,25 +226,39 @@ const App: React.FC = () => {
     <div className={`flex flex-col min-h-screen ${isCompact ? 'overflow-y-auto' : 'h-screen overflow-hidden'} transition-colors duration-300 ${isDark ? 'bg-slate-950 text-slate-200' : 'bg-slate-50 text-slate-800'}`}>
       <header className={`flex items-center justify-between px-4 py-2.5 border-b shrink-0 sticky top-0 z-50 transition-colors ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
         <div className="flex items-center gap-2 md:gap-4">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 cursor-pointer" onClick={() => setView('studio')}>
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-black shadow-lg shadow-blue-500/20">N</div>
             {!isCompact && <h1 className="font-black text-lg tracking-tighter bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">NovaAPI</h1>}
           </div>
           
-          <div className={`flex items-center gap-1 p-1 rounded-lg border transition-all ${isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-100'}`}>
-            <i className="fas fa-globe text-[10px] text-slate-500 ml-1"></i>
-            <select
-              value={activeEnvId || ''}
-              onChange={(e) => setActiveEnvId(e.target.value || null)}
-              className={`text-[10px] font-bold bg-transparent outline-none px-2 py-0.5 min-w-[100px] transition-colors ${isDark ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-500'}`}
-            >
-              <option value="">No Environment</option>
-              {environments.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
-            </select>
-          </div>
+          {view === 'studio' && (
+            <div className={`flex items-center gap-1 p-1 rounded-lg border transition-all ${isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-100'}`}>
+              <i className="fas fa-globe text-[10px] text-slate-500 ml-1"></i>
+              <select
+                value={activeEnvId || ''}
+                onChange={(e) => setActiveEnvId(e.target.value || null)}
+                className={`text-[10px] font-bold bg-transparent outline-none px-2 py-0.5 min-w-[100px] transition-colors ${isDark ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-500'}`}
+              >
+                <option value="">No Environment</option>
+                {environments.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+              </select>
+            </div>
+          )}
         </div>
 
         <div className="flex gap-2 items-center">
+          {isSuperUser && view === 'studio' && (
+            <button 
+              onClick={() => setView('admin')} 
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                isDark ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/30 hover:bg-indigo-600 hover:text-white' : 'bg-indigo-50 text-indigo-600 border border-indigo-100 hover:bg-indigo-600 hover:text-white shadow-sm'
+              }`}
+            >
+              <i className="fas fa-shield-alt"></i>
+              Admin
+            </button>
+          )}
+
           <button onClick={() => setShowSettings(true)} className={`p-2 rounded-md transition-all ${isDark ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'}`} title="Settings">
             <i className="fas fa-cog"></i>
           </button>
@@ -253,8 +270,10 @@ const App: React.FC = () => {
 
           {user ? (
             <div className="flex items-center gap-3">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-blue-500">{user.username}</span>
-              <button onClick={() => setUser(null)} className="text-[10px] font-bold text-slate-500 hover:text-red-500 uppercase">Logout</button>
+              <span className={`text-[10px] font-bold uppercase tracking-widest ${isSuperUser ? 'text-indigo-500' : 'text-blue-500'}`}>
+                {user.email.split('@')[0]}
+              </span>
+              <button onClick={() => { setUser(null); setView('studio'); }} className="text-[10px] font-bold text-slate-500 hover:text-red-500 uppercase">Logout</button>
             </div>
           ) : (
             <button onClick={() => setShowAuth(true)} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-1.5 rounded-md text-[10px] font-black uppercase tracking-widest transition-all">Join</button>
@@ -268,187 +287,191 @@ const App: React.FC = () => {
       {showSettings && <SettingsModal theme={theme} onClose={() => setShowSettings(false)} environments={environments} onUpdateEnvironments={setEnvironments} />}
       {showAuth && <AuthModal theme={theme} onClose={() => setShowAuth(false)} onAuth={setUser} />}
 
-      <main className={`flex-1 flex ${isCompact ? 'flex-col' : 'flex-row'} overflow-hidden`}>
-        {!isCompact && (
-          <aside className={`w-72 border-r flex flex-col shrink-0 transition-colors ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
-            <div className={`flex border-b shrink-0 ${isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
-              <button onClick={() => setSidebarTab('history')} className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all ${sidebarTab === 'history' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>History</button>
-              <button onClick={() => setSidebarTab('collections')} className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all ${sidebarTab === 'collections' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>Collections</button>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto p-2">
-              {sidebarTab === 'history' ? (
-                history.map(item => (
-                  <button key={item.id} onClick={() => setConfig(item.request)} className={`w-full text-left p-2 rounded group transition-all mb-1 border ${isDark ? 'hover:bg-slate-800 border-transparent hover:border-slate-700' : 'hover:bg-blue-50 border-transparent hover:border-blue-100'}`}>
-                    <div className="flex items-center justify-between">
-                      <span className={`text-[9px] font-bold px-1 rounded ${item.request.method === 'GET' ? 'text-green-500 bg-green-500/10' : 'text-blue-500 bg-blue-500/10'}`}>{item.request.method}</span>
-                      <span className={`text-[9px] font-bold ${item.responseStatus && item.responseStatus < 300 ? 'text-green-500' : 'text-red-500'}`}>{item.responseStatus || 'ERR'}</span>
-                    </div>
-                    <div className={`text-[10px] truncate mt-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{item.request.url}</div>
-                  </button>
-                ))
-              ) : (
-                collections.map(col => (
-                  <div key={col.id} className="mb-4">
-                    <div className="px-2 py-1 flex justify-between items-center mb-1">
-                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{col.name}</span>
-                    </div>
-                    {col.requests.map((req, i) => (
-                      <button key={i} onClick={() => setConfig(req)} className={`w-full text-left p-2 rounded group transition-all mb-1 border ${isDark ? 'hover:bg-slate-800 border-transparent hover:border-slate-700' : 'hover:bg-blue-50 border-transparent hover:border-blue-100'}`}>
-                        <div className="flex items-center gap-2">
-                          <span className={`text-[9px] font-bold w-10 text-center rounded ${req.method === 'GET' ? 'text-green-500 bg-green-500/10' : 'text-blue-500 bg-blue-500/10'}`}>{req.method}</span>
-                          <span className="text-[10px] font-bold truncate">{req.name || 'Untitled'}</span>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                ))
-              )}
-            </div>
-          </aside>
-        )}
-
-        <div className={`flex-1 flex ${isCompact ? 'flex-col' : 'flex-row'} overflow-hidden`}>
-          {/* Request Panel */}
-          <section className={`flex flex-col border-slate-800 ${isCompact ? 'w-full' : 'w-1/2 border-r'} transition-colors ${isDark ? '' : 'bg-white'}`}>
-            <div className={`p-4 border-b flex flex-col gap-3 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
-              <div className="flex gap-2">
-                <select 
-                  value={config.method}
-                  onChange={(e) => setConfig({ ...config, method: e.target.value as Method })}
-                  className={`border rounded-lg px-3 py-2 text-xs font-black outline-none transition-all ${isDark ? 'bg-slate-800 border-slate-700 text-blue-400' : 'bg-slate-50 border-slate-200 text-blue-600'}`}
-                >
-                  {['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map(m => <option key={m} value={m}>{m}</option>)}
-                </select>
-                <input
-                  type="text"
-                  value={config.url}
-                  onChange={(e) => setConfig({ ...config, url: e.target.value })}
-                  placeholder="https://api.example.com/v1/{{resource}}..."
-                  className={`flex-1 border rounded-lg px-4 py-2 text-xs outline-none font-mono transition-all focus:ring-2 focus:ring-blue-500/20 ${isDark ? 'bg-slate-800 border-slate-700 text-slate-200 focus:border-blue-500' : 'bg-slate-50 border-slate-200 text-slate-800 focus:border-blue-400'}`}
-                />
+      {view === 'admin' ? (
+        <AdminPage theme={theme} onBack={() => setView('studio')} />
+      ) : (
+        <main className={`flex-1 flex ${isCompact ? 'flex-col' : 'flex-row'} overflow-hidden`}>
+          {!isCompact && (
+            <aside className={`w-72 border-r flex flex-col shrink-0 transition-colors ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+              <div className={`flex border-b shrink-0 ${isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                <button onClick={() => setSidebarTab('history')} className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all ${sidebarTab === 'history' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>History</button>
+                <button onClick={() => setSidebarTab('collections')} className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all ${sidebarTab === 'collections' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>Collections</button>
               </div>
-              <div className="flex gap-2">
-                <button onClick={handleSend} disabled={loading} className="flex-1 py-2.5 rounded-lg font-black text-xs bg-blue-600 hover:bg-blue-500 text-white disabled:bg-slate-400 flex items-center justify-center gap-2 shadow-xl shadow-blue-500/20 active:scale-[0.98] transition-all">
-                  {loading ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-paper-plane"></i>}
-                  EXECUTE
-                </button>
-                <button onClick={saveToCollection} className={`px-4 rounded-lg text-xs font-bold border transition-all ${isDark ? 'border-slate-700 text-slate-400 hover:bg-slate-800' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`} title="Save Request">
-                  <i className="fas fa-save"></i>
-                </button>
-                <button onClick={() => setShowImport(true)} className={`px-4 rounded-lg text-xs font-bold border transition-all ${isDark ? 'border-slate-700 text-slate-400 hover:bg-slate-800' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`} title="Import cURL/SOAP">
-                  <i className="fas fa-file-import"></i>
-                </button>
-              </div>
-            </div>
-
-            <div className="flex-1 flex flex-col overflow-hidden">
-              <div className={`flex border-b overflow-x-auto no-scrollbar ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
-                {(['params', 'headers', 'body', 'script'] as const).map(tab => (
-                  <button key={tab} onClick={() => setActiveTab(tab)} className={`px-5 py-3 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all shrink-0 ${activeTab === tab ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>{tab}</button>
-                ))}
-              </div>
-              <div className="flex-1 overflow-y-auto p-4">
-                {activeTab === 'headers' && (
-                  <div className="space-y-2">
-                    {config.headers.map((h, i) => (
-                      <div key={i} className="flex gap-2 items-center">
-                        <input type="checkbox" checked={h.enabled} onChange={(e) => {
-                          const h2 = [...config.headers]; h2[i].enabled = e.target.checked; setConfig({...config, headers: h2});
-                        }} className="w-4 h-4 accent-blue-600" />
-                        <input type="text" value={h.key} placeholder="Header" onChange={(e) => {
-                          const h2 = [...config.headers]; h2[i].key = e.target.value; setConfig({...config, headers: h2});
-                        }} className={`flex-1 border rounded px-3 py-2 text-xs outline-none ${isDark ? 'bg-slate-900 border-slate-800 text-slate-300' : 'bg-white border-slate-200 text-slate-800'}`} />
-                        <input type="text" value={h.value} placeholder="Value" onChange={(e) => {
-                          const h2 = [...config.headers]; h2[i].value = e.target.value; setConfig({...config, headers: h2});
-                        }} className={`flex-1 border rounded px-3 py-2 text-xs outline-none ${isDark ? 'bg-slate-900 border-slate-800 text-slate-300' : 'bg-white border-slate-200 text-slate-800'}`} />
-                        <button onClick={() => setConfig({...config, headers: config.headers.filter((_, idx) => idx !== i)})} className="p-2 text-slate-600 hover:text-red-500"><i className="fas fa-trash-alt text-xs"></i></button>
+              
+              <div className="flex-1 overflow-y-auto p-2">
+                {sidebarTab === 'history' ? (
+                  history.map(item => (
+                    <button key={item.id} onClick={() => setConfig(item.request)} className={`w-full text-left p-2 rounded group transition-all mb-1 border ${isDark ? 'hover:bg-slate-800 border-transparent hover:border-slate-700' : 'hover:bg-blue-50 border-transparent hover:border-blue-100'}`}>
+                      <div className="flex items-center justify-between">
+                        <span className={`text-[9px] font-bold px-1 rounded ${item.request.method === 'GET' ? 'text-green-500 bg-green-500/10' : 'text-blue-500 bg-blue-500/10'}`}>{item.request.method}</span>
+                        <span className={`text-[9px] font-bold ${item.responseStatus && item.responseStatus < 300 ? 'text-green-500' : 'text-red-500'}`}>{item.responseStatus || 'ERR'}</span>
                       </div>
-                    ))}
-                    <button onClick={() => setConfig({...config, headers: [...config.headers, {key: '', value: '', enabled: true}]})} className="text-[10px] text-blue-500 mt-2 font-bold uppercase hover:underline transition-all">+ Add Row</button>
-                  </div>
+                      <div className={`text-[10px] truncate mt-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{item.request.url}</div>
+                    </button>
+                  ))
+                ) : (
+                  collections.map(col => (
+                    <div key={col.id} className="mb-4">
+                      <div className="px-2 py-1 flex justify-between items-center mb-1">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{col.name}</span>
+                      </div>
+                      {col.requests.map((req, i) => (
+                        <button key={i} onClick={() => setConfig(req)} className={`w-full text-left p-2 rounded group transition-all mb-1 border ${isDark ? 'hover:bg-slate-800 border-transparent hover:border-slate-700' : 'hover:bg-blue-50 border-transparent hover:border-blue-100'}`}>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-[9px] font-bold w-10 text-center rounded ${req.method === 'GET' ? 'text-green-500 bg-green-500/10' : 'text-blue-500 bg-blue-500/10'}`}>{req.method}</span>
+                            <span className="text-[10px] font-bold truncate">{req.name || 'Untitled'}</span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  ))
                 )}
-                {activeTab === 'body' && <div className="h-full min-h-[250px]"><Editor theme={theme} value={config.body} onChange={(v) => setConfig({...config, body: v})} placeholder="Request payload... use {{variable}} for environment values" /></div>}
-                {activeTab === 'script' && <div className="h-full min-h-[250px]"><Editor theme={theme} value={config.transformationScript} onChange={(v) => setConfig({...config, transformationScript: v})} /></div>}
               </div>
-            </div>
-          </section>
+            </aside>
+          )}
 
-          {/* Response Panel */}
-          <section className={`flex flex-col ${isCompact ? 'w-full' : 'w-1/2'} transition-colors ${isDark ? 'bg-slate-950' : 'bg-white'}`}>
-             <div className={`p-4 border-b flex justify-between items-center h-[68px] ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-slate-50 border-slate-100'}`}>
-               <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Response Stream</h3>
-               {originalResponse && (
-                 <div className="flex items-center gap-3">
-                   <div className="flex flex-col items-end">
-                     <span className={`text-[10px] font-black ${originalResponse.status < 300 ? 'text-green-500' : 'text-red-500'}`}>{originalResponse.status} {originalResponse.statusText}</span>
-                     <span className="text-[9px] text-slate-500 font-bold">{originalResponse.time}ms • {originalResponse.size}</span>
-                   </div>
-                   <button onClick={() => setIsEditingResponse(!isEditingResponse)} className={`text-[10px] p-2 rounded-lg transition-all ${isEditingResponse ? 'bg-blue-600 text-white' : isDark ? 'bg-slate-800 text-slate-400 hover:text-white' : 'bg-white border border-slate-200 text-slate-600 shadow-sm'}`}>
-                     <i className="fas fa-pencil-alt"></i>
-                   </button>
-                 </div>
-               )}
-             </div>
+          <div className={`flex-1 flex ${isCompact ? 'flex-col' : 'flex-row'} overflow-hidden`}>
+            {/* Request Panel */}
+            <section className={`flex flex-col border-slate-800 ${isCompact ? 'w-full' : 'w-1/2 border-r'} transition-colors ${isDark ? '' : 'bg-white'}`}>
+              <div className={`p-4 border-b flex flex-col gap-3 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
+                <div className="flex gap-2">
+                  <select 
+                    value={config.method}
+                    onChange={(e) => setConfig({ ...config, method: e.target.value as Method })}
+                    className={`border rounded-lg px-3 py-2 text-xs font-black outline-none transition-all ${isDark ? 'bg-slate-800 border-slate-700 text-blue-400' : 'bg-slate-50 border-slate-200 text-blue-600'}`}
+                  >
+                    {['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map(m => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                  <input
+                    type="text"
+                    value={config.url}
+                    onChange={(e) => setConfig({ ...config, url: e.target.value })}
+                    placeholder="https://api.example.com/v1/{{resource}}..."
+                    className={`flex-1 border rounded-lg px-4 py-2 text-xs outline-none font-mono transition-all focus:ring-2 focus:ring-blue-500/20 ${isDark ? 'bg-slate-800 border-slate-700 text-slate-200 focus:border-blue-500' : 'bg-slate-50 border-slate-200 text-slate-800 focus:border-blue-400'}`}
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={handleSend} disabled={loading} className="flex-1 py-2.5 rounded-lg font-black text-xs bg-blue-600 hover:bg-blue-500 text-white disabled:bg-slate-400 flex items-center justify-center gap-2 shadow-xl shadow-blue-500/20 active:scale-[0.98] transition-all">
+                    {loading ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-paper-plane"></i>}
+                    EXECUTE
+                  </button>
+                  <button onClick={saveToCollection} className={`px-4 rounded-lg text-xs font-bold border transition-all ${isDark ? 'border-slate-700 text-slate-400 hover:bg-slate-800' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`} title="Save Request">
+                    <i className="fas fa-save"></i>
+                  </button>
+                  <button onClick={() => setShowImport(true)} className={`px-4 rounded-lg text-xs font-bold border transition-all ${isDark ? 'border-slate-700 text-slate-400 hover:bg-slate-800' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`} title="Import cURL/SOAP">
+                    <i className="fas fa-file-import"></i>
+                  </button>
+                </div>
+              </div>
 
-             <div className="flex-1 flex flex-col overflow-hidden">
-               {originalResponse ? (
-                 <>
-                   <div className={`flex border-b overflow-x-auto no-scrollbar ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
-                     {(['body', 'table', 'code'] as const).map(tab => (
-                       <button key={tab} onClick={() => setRespTab(tab)} className={`px-5 py-3 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all shrink-0 ${respTab === tab ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>{tab}</button>
-                     ))}
+              <div className="flex-1 flex flex-col overflow-hidden">
+                <div className={`flex border-b overflow-x-auto no-scrollbar ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
+                  {(['params', 'headers', 'body', 'script'] as const).map(tab => (
+                    <button key={tab} onClick={() => setActiveTab(tab)} className={`px-5 py-3 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all shrink-0 ${activeTab === tab ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>{tab}</button>
+                  ))}
+                </div>
+                <div className="flex-1 overflow-y-auto p-4">
+                  {activeTab === 'headers' && (
+                    <div className="space-y-2">
+                      {config.headers.map((h, i) => (
+                        <div key={i} className="flex gap-2 items-center">
+                          <input type="checkbox" checked={h.enabled} onChange={(e) => {
+                            const h2 = [...config.headers]; h2[i].enabled = e.target.checked; setConfig({...config, headers: h2});
+                          }} className="w-4 h-4 accent-blue-600" />
+                          <input type="text" value={h.key} placeholder="Header" onChange={(e) => {
+                            const h2 = [...config.headers]; h2[i].key = e.target.value; setConfig({...config, headers: h2});
+                          }} className={`flex-1 border rounded px-3 py-2 text-xs outline-none ${isDark ? 'bg-slate-900 border-slate-800 text-slate-300' : 'bg-white border-slate-200 text-slate-800'}`} />
+                          <input type="text" value={h.value} placeholder="Value" onChange={(e) => {
+                            const h2 = [...config.headers]; h2[i].value = e.target.value; setConfig({...config, headers: h2});
+                          }} className={`flex-1 border rounded px-3 py-2 text-xs outline-none ${isDark ? 'bg-slate-900 border-slate-800 text-slate-300' : 'bg-white border-slate-200 text-slate-800'}`} />
+                          <button onClick={() => setConfig({...config, headers: config.headers.filter((_, idx) => idx !== i)})} className="p-2 text-slate-600 hover:text-red-500"><i className="fas fa-trash-alt text-xs"></i></button>
+                        </div>
+                      ))}
+                      <button onClick={() => setConfig({...config, headers: [...config.headers, {key: '', value: '', enabled: true}]})} className="text-[10px] text-blue-500 mt-2 font-bold uppercase hover:underline transition-all">+ Add Row</button>
+                    </div>
+                  )}
+                  {activeTab === 'body' && <div className="h-full min-h-[250px]"><Editor theme={theme} value={config.body} onChange={(v) => setConfig({...config, body: v})} placeholder="Request payload... use {{variable}} for environment values" /></div>}
+                  {activeTab === 'script' && <div className="h-full min-h-[250px]"><Editor theme={theme} value={config.transformationScript} onChange={(v) => setConfig({...config, transformationScript: v})} /></div>}
+                </div>
+              </div>
+            </section>
+
+            {/* Response Panel */}
+            <section className={`flex flex-col ${isCompact ? 'w-full' : 'w-1/2'} transition-colors ${isDark ? 'bg-slate-950' : 'bg-white'}`}>
+               <div className={`p-4 border-b flex justify-between items-center h-[68px] ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-slate-50 border-slate-100'}`}>
+                 <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Response Stream</h3>
+                 {originalResponse && (
+                   <div className="flex items-center gap-3">
+                     <div className="flex flex-col items-end">
+                       <span className={`text-[10px] font-black ${originalResponse.status < 300 ? 'text-green-500' : 'text-red-500'}`}>{originalResponse.status} {originalResponse.statusText}</span>
+                       <span className="text-[9px] text-slate-500 font-bold">{originalResponse.time}ms • {originalResponse.size}</span>
+                     </div>
+                     <button onClick={() => setIsEditingResponse(!isEditingResponse)} className={`text-[10px] p-2 rounded-lg transition-all ${isEditingResponse ? 'bg-blue-600 text-white' : isDark ? 'bg-slate-800 text-slate-400 hover:text-white' : 'bg-white border border-slate-200 text-slate-600 shadow-sm'}`}>
+                       <i className="fas fa-pencil-alt"></i>
+                     </button>
                    </div>
-                   <div className="flex-1 overflow-y-auto p-4">
-                     {respTab === 'body' && (
-                       <div className="h-full flex flex-col gap-3">
-                         {originalResponse.type === 'json' && (
-                           <JsonOps theme={theme} data={processedData} onDataChange={setProcessedData} onActionGenerated={setCurrentActionCode} />
-                         )}
-                         {currentActionCode && (
-                           <div className={`border p-3 rounded-xl flex justify-between items-center mb-1 animate-in slide-in-from-top-2 ${isDark ? 'bg-blue-600/10 border-blue-600/30' : 'bg-blue-50 border-blue-100'}`}>
-                             <code className={`text-[10px] truncate font-mono flex-1 ${isDark ? 'text-blue-300' : 'text-blue-600'}`}>{currentActionCode}</code>
-                             <div className="flex gap-2 ml-4">
-                               <button onClick={() => setCurrentActionCode('')} className="text-[10px] font-bold text-slate-500 uppercase">Clear</button>
-                               <button onClick={() => {
-                                 const cleanAction = currentActionCode.startsWith('data.') ? `data = ${currentActionCode};` : `data = ${currentActionCode.replace('data', 'data')};`;
-                                 const newScript = `${config.transformationScript}\n\n// UI Generated:\n${cleanAction}\nreturn data;`;
-                                 setConfig({ ...config, transformationScript: newScript });
-                                 setActiveTab('script');
-                               }} className="text-[10px] font-black bg-blue-600 text-white px-3 py-1 rounded-lg shadow-lg shadow-blue-500/20">APPLY</button>
+                 )}
+               </div>
+
+               <div className="flex-1 flex flex-col overflow-hidden">
+                 {originalResponse ? (
+                   <>
+                     <div className={`flex border-b overflow-x-auto no-scrollbar ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
+                       {(['body', 'table', 'code'] as const).map(tab => (
+                         <button key={tab} onClick={() => setRespTab(tab)} className={`px-5 py-3 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all shrink-0 ${respTab === tab ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>{tab}</button>
+                       ))}
+                     </div>
+                     <div className="flex-1 overflow-y-auto p-4">
+                       {respTab === 'body' && (
+                         <div className="h-full flex flex-col gap-3">
+                           {originalResponse.type === 'json' && (
+                             <JsonOps theme={theme} data={processedData} onDataChange={setProcessedData} onActionGenerated={setCurrentActionCode} />
+                           )}
+                           {currentActionCode && (
+                             <div className={`border p-3 rounded-xl flex justify-between items-center mb-1 animate-in slide-in-from-top-2 ${isDark ? 'bg-blue-600/10 border-blue-600/30' : 'bg-blue-50 border-blue-100'}`}>
+                               <code className={`text-[10px] truncate font-mono flex-1 ${isDark ? 'text-blue-300' : 'text-blue-600'}`}>{currentActionCode}</code>
+                               <div className="flex gap-2 ml-4">
+                                 <button onClick={() => setCurrentActionCode('')} className="text-[10px] font-bold text-slate-500 uppercase">Clear</button>
+                                 <button onClick={() => {
+                                   const cleanAction = currentActionCode.startsWith('data.') ? `data = ${currentActionCode};` : `data = ${currentActionCode.replace('data', 'data')};`;
+                                   const newScript = `${config.transformationScript}\n\n// UI Generated:\n${cleanAction}\nreturn data;`;
+                                   setConfig({ ...config, transformationScript: newScript });
+                                   setActiveTab('script');
+                                 }} className="text-[10px] font-black bg-blue-600 text-white px-3 py-1 rounded-lg shadow-lg shadow-blue-500/20">APPLY</button>
+                               </div>
                              </div>
+                           )}
+                           <div className="flex-1 min-h-[350px]">
+                             <Editor theme={theme} value={typeof processedData === 'object' ? JSON.stringify(processedData, null, 2) : String(processedData)} onChange={(v) => { try { setProcessedData(JSON.parse(v)); } catch(e) {} }} readOnly={!isEditingResponse} />
                            </div>
-                         )}
-                         <div className="flex-1 min-h-[350px]">
-                           <Editor theme={theme} value={typeof processedData === 'object' ? JSON.stringify(processedData, null, 2) : String(processedData)} onChange={(v) => { try { setProcessedData(JSON.parse(v)); } catch(e) {} }} readOnly={!isEditingResponse} />
                          </div>
-                       </div>
-                     )}
-                     {respTab === 'table' && <DataTable theme={theme} data={processedData} onActionGenerated={setCurrentActionCode} mode={config.processingMode} onModeChange={(m) => setConfig({...config, processingMode: m})} onServerSideAction={() => {}} />}
-                     {respTab === 'code' && (
-                       <div className="h-full flex flex-col gap-3">
-                         <div className="flex gap-1 overflow-x-auto no-scrollbar pb-1">
-                           {LANGUAGES.map(l => (
-                             <button key={l.id} onClick={() => setCodeLanguage(l.id)} className={`px-3 py-1 text-[9px] font-black rounded-full border transition-all ${codeLanguage === l.id ? 'bg-blue-600 border-blue-500 text-white' : isDark ? 'bg-slate-800 border-slate-700 text-slate-400' : 'bg-white border-slate-200 text-slate-600 shadow-sm'}`}>{l.name}</button>
-                           ))}
+                       )}
+                       {respTab === 'table' && <DataTable theme={theme} data={processedData} onActionGenerated={setCurrentActionCode} mode={config.processingMode} onModeChange={(m) => setConfig({...config, processingMode: m})} onServerSideAction={() => {}} />}
+                       {respTab === 'code' && (
+                         <div className="h-full flex flex-col gap-3">
+                           <div className="flex gap-1 overflow-x-auto no-scrollbar pb-1">
+                             {LANGUAGES.map(l => (
+                               <button key={l.id} onClick={() => setCodeLanguage(l.id)} className={`px-3 py-1 text-[9px] font-black rounded-full border transition-all ${codeLanguage === l.id ? 'bg-blue-600 border-blue-500 text-white' : isDark ? 'bg-slate-800 border-slate-700 text-slate-400' : 'bg-white border-slate-200 text-slate-600 shadow-sm'}`}>{l.name}</button>
+                             ))}
+                           </div>
+                           <div className="flex-1">
+                            <Editor theme={theme} value={generatedCode} onChange={() => {}} readOnly />
+                           </div>
                          </div>
-                         <div className="flex-1">
-                          <Editor theme={theme} value={generatedCode} onChange={() => {}} readOnly />
-                         </div>
-                       </div>
-                     )}
+                       )}
+                     </div>
+                   </>
+                 ) : (
+                   <div className="flex-1 flex flex-col items-center justify-center p-12 opacity-20">
+                     <i className={`fas fa-bolt text-6xl mb-6 ${isDark ? 'text-slate-800' : 'text-slate-300'}`}></i>
+                     <p className="text-[11px] font-black uppercase tracking-[0.2em] text-center">Standby for transmission</p>
                    </div>
-                 </>
-               ) : (
-                 <div className="flex-1 flex flex-col items-center justify-center p-12 opacity-20">
-                   <i className={`fas fa-bolt text-6xl mb-6 ${isDark ? 'text-slate-800' : 'text-slate-300'}`}></i>
-                   <p className="text-[11px] font-black uppercase tracking-[0.2em] text-center">Standby for transmission</p>
-                 </div>
-               )}
-             </div>
-          </section>
-        </div>
-      </main>
+                 )}
+               </div>
+            </section>
+          </div>
+        </main>
+      )}
 
       <footer className={`border-t px-4 py-2 flex justify-between items-center text-[10px] font-mono shrink-0 transition-colors ${isDark ? 'bg-slate-950 border-slate-900 text-slate-600' : 'bg-slate-100 border-slate-200 text-slate-400'}`}>
         <div className="flex items-center gap-4">

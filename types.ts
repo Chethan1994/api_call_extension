@@ -56,7 +56,11 @@ export interface Collection {
 }
 
 export interface User {
+  id: string;
+  email: string;
   username: string;
-  password?: string; // Stored locally for simulation
+  password?: string;
+  role: 'superadmin' | 'user';
   activeEnvId?: string;
+  createdAt: number;
 }

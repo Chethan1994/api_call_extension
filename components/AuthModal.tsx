@@ -8,9 +8,11 @@ interface AuthModalProps {
   theme?: 'dark' | 'light';
 }
 
+const SUPER_USER_EMAIL = 'chethansg4@gmail.com';
+
 export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onAuth, theme = 'dark' }) => {
   const [isLogin, setIsLogin] = useState(true);
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const isDark = theme === 'dark';
@@ -19,7 +21,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onAuth, theme = '
     e.preventDefault();
     setError('');
 
-    if (!username || !password) {
+    if (!email || !password) {
       setError('Please fill in all fields');
       return;
     }
@@ -27,19 +29,28 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onAuth, theme = '
     const savedUsers = JSON.parse(localStorage.getItem('nova_users') || '[]');
 
     if (isLogin) {
-      const user = savedUsers.find((u: User) => u.username === username && u.password === password);
+      const user = savedUsers.find((u: User) => u.email === email && u.password === password);
       if (user) {
         onAuth(user);
         onClose();
       } else {
-        setError('Invalid username or password');
+        setError('Invalid email or password');
       }
     } else {
-      if (savedUsers.find((u: User) => u.username === username)) {
-        setError('Username already exists');
+      if (savedUsers.find((u: User) => u.email === email)) {
+        setError('Email already registered');
         return;
       }
-      const newUser: User = { username, password };
+      
+      const newUser: User = { 
+        id: crypto.randomUUID(),
+        email: email,
+        username: email.split('@')[0],
+        password,
+        role: email === SUPER_USER_EMAIL ? 'superadmin' : 'user',
+        createdAt: Date.now()
+      };
+      
       savedUsers.push(newUser);
       localStorage.setItem('nova_users', JSON.stringify(savedUsers));
       onAuth(newUser);
@@ -61,13 +72,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onAuth, theme = '
           
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1 ml-1">Username</label>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1 ml-1">Email Address</label>
               <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 className={`w-full border rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-500/50 transition-all ${isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'}`}
-                placeholder="developer_01"
+                placeholder="dev@novaapi.com"
               />
             </div>
             <div>
