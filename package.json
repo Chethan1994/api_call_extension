@@ -10,7 +10,7 @@
     "electron": "^25.0.0"
   },
   "scripts": {
-    "build": "mkdir -p public && cp -rf index.html index.tsx types.ts constants.tsx vercel.json manifest.json package.json electron-main.js capacitor.config.ts public/ && cp -rf components services utils public/ 2>/dev/null || true",
+    "build": "mkdir -p public && cp -rf *.html *.tsx *.ts *.json public/ && cp -rf components services utils public/ 2>/dev/null || true",
     "desktop": "electron .",
     "mobile:add:android": "npx cap add android",
     "mobile:add:ios": "npx cap add ios",
