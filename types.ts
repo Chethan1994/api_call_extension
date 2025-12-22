@@ -9,6 +9,7 @@ export interface Header {
 }
 
 export interface RequestConfig {
+  name?: string;
   url: string;
   method: Method;
   headers: Header[];
@@ -34,4 +35,28 @@ export interface HistoryItem {
   timestamp: number;
   request: RequestConfig;
   responseStatus?: number;
+}
+
+export interface EnvVariable {
+  key: string;
+  value: string;
+  enabled: boolean;
+}
+
+export interface Environment {
+  id: string;
+  name: string;
+  variables: EnvVariable[];
+}
+
+export interface Collection {
+  id: string;
+  name: string;
+  requests: RequestConfig[];
+}
+
+export interface User {
+  username: string;
+  password?: string; // Stored locally for simulation
+  activeEnvId?: string;
 }

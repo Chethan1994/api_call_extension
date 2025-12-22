@@ -3,28 +3,35 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>NovaAPI</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         body {
-            background-color: #0f172a;
-            color: #e2e8f0;
+            margin: 0;
+            padding: 0;
+            transition: background-color 0.3s ease;
+            /* Safe area padding for mobile notches */
+            padding-top: env(safe-area-inset-top);
+            padding-bottom: env(safe-area-inset-bottom);
+            padding-left: env(safe-area-inset-left);
+            padding-right: env(safe-area-inset-right);
+            overflow: hidden;
         }
         ::-webkit-scrollbar {
             width: 8px;
             height: 8px;
         }
         ::-webkit-scrollbar-track {
-            background: #1e293b;
+            background: transparent;
         }
         ::-webkit-scrollbar-thumb {
-            background: #334155;
+            background: #475569;
             border-radius: 4px;
         }
         ::-webkit-scrollbar-thumb:hover {
-            background: #475569;
+            background: #64748b;
         }
         @keyframes slideIn {
             from { transform: translateY(20px); opacity: 0; }
@@ -33,20 +40,34 @@
         .animate-slide-in {
             animation: slideIn 0.3s ease-out forwards;
         }
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        /* Mobile touch improvements */
+        @media (max-width: 640px) {
+            button, select, input {
+                min-height: 44px;
+            }
+        }
     </style>
 <script type="importmap">
 {
   "imports": {
+    "react": "https://esm.sh/react@19.0.0",
+    "react-dom": "https://esm.sh/react-dom@19.0.0",
+    "react-dom/client": "https://esm.sh/react-dom@19.0.0/client",
+    "jszip": "https://esm.sh/jszip@3.10.1",
+    "fmt": "https://esm.sh/fmt@2.0.0",
+    "@capacitor/cli": "https://esm.sh/@capacitor/cli@^8.0.0",
     "react/": "https://esm.sh/react@^19.2.3/",
-    "react": "https://esm.sh/react@^19.2.3",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "jszip": "https://esm.sh/jszip@^3.10.1",
-    "fmt": "https://esm.sh/fmt@^2.0.0"
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/"
   }
 }
 </script>
 </head>
 <body>
     <div id="root"></div>
+    <!-- Explicitly load the application module -->
+    <script type="module" src="index.tsx"></script>
 </body>
 </html>

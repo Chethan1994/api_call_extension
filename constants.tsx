@@ -18,8 +18,13 @@ export const INITIAL_REQUEST: RequestConfig = {
 
 export const LANGUAGES = [
   { id: 'curl', name: 'cURL' },
-  { id: 'javascript', name: 'JavaScript (Fetch)' },
-  { id: 'python', name: 'Python (Requests)' },
-  { id: 'go', name: 'Go (Native)' },
-  { id: 'java', name: 'Java (OkHttp)' }
+  { id: 'js-fetch', name: 'JS Fetch' },
+  { id: 'ts-fetch', name: 'TS Fetch' },
+  { id: 'js-axios', name: 'JS Axios' },
+  { id: 'ts-axios', name: 'TS Axios' },
+  { id: 'node-axios', name: 'Node Axios' },
+  { id: 'node-https', name: 'Node HTTPS' },
+  { id: 'python-requests', name: 'Python' },
+  { id: 'go-native', name: 'Go' },
+  { id: 'java-okhttp', name: 'Java' }
 ];

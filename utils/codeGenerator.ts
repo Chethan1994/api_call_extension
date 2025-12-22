@@ -4,6 +4,8 @@ import { RequestConfig } from "../types";
 export const generateLocalCode = (config: RequestConfig, language: string): string => {
   const { url, method, headers, body } = config;
   const enabledHeaders = headers.filter(h => h.enabled && h.key);
+  const headerObj = enabledHeaders.reduce((acc, h) => ({ ...acc, [h.key]: h.value }), {});
+  const safeBody = body || '{}';
   
   switch (language) {
     case 'curl': {
@@ -17,20 +19,129 @@ export const generateLocalCode = (config: RequestConfig, language: string): stri
       return cmd;
     }
 
-    case 'javascript': {
-      const headerObj = enabledHeaders.reduce((acc, h) => ({ ...acc, [h.key]: h.value }), {});
+    case 'js-fetch':
       return `fetch("${url}", {
   method: "${method}",
   headers: ${JSON.stringify(headerObj, null, 2)},
-  ${body && method !== 'GET' ? `body: JSON.stringify(${body})` : ''}
+  ${body && method !== 'GET' ? `body: ${JSON.stringify(body)}` : ''}
 })
-.then(response => response.text())
+.then(response => response.json())
 .then(result => console.log(result))
-.catch(error => console.log('error', error));`;
+.catch(error => console.error('Error:', error));`;
+
+    case 'ts-fetch':
+      return `interface RequestHeaders {
+  [key: string]: string;
+}
+
+const headers: RequestHeaders = ${JSON.stringify(headerObj, null, 2)};
+
+async function makeRequest<T>(): Promise<T | void> {
+  try {
+    const response = await fetch("${url}", {
+      method: "${method}",
+      headers,
+      ${body && method !== 'GET' ? `body: ${JSON.stringify(body)}` : ''}
+    });
+    
+    if (!response.ok) {
+      throw new Error(\`HTTP error! status: \${response.status}\`);
     }
 
-    case 'python': {
-      const headerObj = enabledHeaders.reduce((acc, h) => ({ ...acc, [h.key]: h.value }), {});
+    return await response.json() as T;
+  } catch (error) {
+    console.error('Fetch error:', error);
+  }
+}
+
+makeRequest().then(data => console.log(data));`;
+
+    case 'js-axios':
+      return `const axios = require('axios');
+
+const config = {
+  method: '${method.toLowerCase()}',
+  url: '${url}',
+  headers: ${JSON.stringify(headerObj, null, 2)},
+  ${body && method !== 'GET' ? `data: ${body}` : ''}
+};
+
+axios(config)
+.then(response => {
+  console.log(JSON.stringify(response.data));
+})
+.catch(error => {
+  console.log(error);
+});`;
+
+    case 'ts-axios':
+      return `import axios, { AxiosRequestConfig, AxiosResponse } from 'axios';
+
+const config: AxiosRequestConfig = {
+  method: '${method.toLowerCase()}',
+  url: '${url}',
+  headers: ${JSON.stringify(headerObj, null, 2)},
+  ${body && method !== 'GET' ? `data: ${body}` : ''}
+};
+
+axios(config)
+  .then((response: AxiosResponse) => {
+    console.log(response.data);
+  })
+  .catch((error) => {
+    console.error(error);
+  });`;
+
+    case 'node-axios':
+      return `const axios = require('axios');
+
+(async () => {
+  try {
+    const response = await axios({
+      method: '${method.toLowerCase()}',
+      url: '${url}',
+      headers: ${JSON.stringify(headerObj, null, 2)},
+      ${body && method !== 'GET' ? `data: ${body}` : ''}
+    });
+    console.log(response.data);
+  } catch (error) {
+    console.error('Error executing request:', error.message);
+  }
+})();`;
+
+    case 'node-https': {
+      const parsedUrl = new URL(url);
+      return `const https = require('https');
+
+const options = {
+  hostname: '${parsedUrl.hostname}',
+  port: 443,
+  path: '${parsedUrl.pathname}${parsedUrl.search}',
+  method: '${method}',
+  headers: ${JSON.stringify(headerObj, null, 2)}
+};
+
+const req = https.request(options, (res) => {
+  let data = '';
+
+  res.on('data', (chunk) => {
+    data += chunk;
+  });
+
+  res.on('end', () => {
+    console.log('Response:', data);
+  });
+});
+
+req.on('error', (e) => {
+  console.error('Problem with request:', e.message);
+});
+
+${body && method !== 'GET' ? `req.write(${JSON.stringify(body)});` : ''}
+req.end();`;
+    }
+
+    case 'python-requests': {
       return `import requests
 import json
 
@@ -42,7 +153,7 @@ response = requests.request("${method}", url, headers=headers, data=payload)
 print(response.text)`;
     }
 
-    case 'go': {
+    case 'go-native': {
       return `package main
 
 import (
@@ -70,16 +181,25 @@ func main() {
 }`;
     }
 
-    case 'java': {
-      return `OkHttpClient client = new OkHttpClient().newBuilder().build();
-MediaType mediaType = MediaType.parse("text/plain");
-RequestBody body = RequestBody.create(mediaType, "${body.replace(/"/g, "\\\"")}");
-Request request = new Request.Builder()
-  .url("${url}")
-  .method("${method}", body)
-  ${enabledHeaders.map(h => `.addHeader("${h.key}", "${h.value}")`).join('\n  ')}
-  .build();
-Response response = client.newCall(request).execute();`;
+    case 'java-okhttp': {
+      return `import okhttp3.*;
+
+public class Main {
+  public static void main(String[] args) throws Exception {
+    OkHttpClient client = new OkHttpClient().newBuilder().build();
+    MediaType mediaType = MediaType.parse("application/json");
+    ${method !== 'GET' ? `RequestBody body = RequestBody.create(mediaType, "${body.replace(/"/g, "\\\"")}");` : 'RequestBody body = null;'}
+    
+    Request request = new Request.Builder()
+      .url("${url}")
+      .method("${method}", body)
+      ${enabledHeaders.map(h => `.addHeader("${h.key}", "${h.value}")`).join('\n      ')}
+      .build();
+      
+    Response response = client.newCall(request).execute();
+    System.out.println(response.body().string());
+  }
+}`;
     }
 
     default:
