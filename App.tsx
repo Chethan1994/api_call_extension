@@ -14,7 +14,7 @@ import { generateLocalCode } from './utils/codeGenerator';
 
 const App: React.FC = () => {
   // Persistence Helpers
-  const loadLocal = <T,>(key: string, def: T): T => {
+  function loadLocal<T>(key: string, def: T): T {
     const s = localStorage.getItem(key);
     if (s === null) return def;
     try {
@@ -23,7 +23,7 @@ const App: React.FC = () => {
       // Fallback for raw strings previously saved without JSON.stringify
       return s as unknown as T;
     }
-  };
+  }
 
   // State Management
   const [config, setConfig] = useState<RequestConfig>(loadLocal('nova_last_config', INITIAL_REQUEST));
