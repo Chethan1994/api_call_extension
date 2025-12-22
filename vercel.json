@@ -1,12 +1,13 @@
 
 {
+  "version": 2,
   "headers": [
     {
       "source": "/(.*)\\.tsx",
       "headers": [
         {
           "key": "Content-Type",
-          "value": "application/javascript"
+          "value": "text/javascript"
         }
       ]
     },
@@ -15,9 +16,15 @@
       "headers": [
         {
           "key": "Content-Type",
-          "value": "application/javascript"
+          "value": "text/javascript"
         }
       ]
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/$1"
     }
   ]
 }

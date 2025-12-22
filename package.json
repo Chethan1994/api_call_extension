@@ -10,6 +10,7 @@
     "electron": "^25.0.0"
   },
   "scripts": {
+    "build": "mkdir -p dist && cp -r . dist || true",
     "desktop": "electron .",
     "mobile:add:android": "npx cap add android",
     "mobile:add:ios": "npx cap add ios",
