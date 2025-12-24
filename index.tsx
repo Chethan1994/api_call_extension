@@ -1,14 +1,29 @@
+
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import ReactDOM from 'react-dom/client';
+import { generateLocalCode } from './utils/codeGenerator';
 
 // --- Types & Constants ---
-type Method = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'HEAD' | 'OPTIONS';
-type ResponseTab = 'pretty' | 'table' | 'transform' | 'headers' | 'raw';
+type Method = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'HEAD' | 'OPTIONS' | 'LIST' | 'RETR' | 'STOR';
+
+// Define the standard REST methods for the dropdown
+const METHODS: Method[] = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'];
+
+type ResponseTab = 'pretty' | 'table' | 'preview' | 'media' | 'analytics' | 'docs' | 'headers' | 'raw';
 
 interface Header {
   key: string;
   value: string;
   enabled: boolean;
+}
+
+interface AnalyticsData {
+  totalRequests: number;
+  successCount: number;
+  errorCount: number;
+  avgLatency: number;
+  totalData: number;
+  statusCodes: Record<number, number>;
 }
 
 interface HistoryItem {
@@ -25,85 +40,130 @@ interface HistoryItem {
   body: string;
   response: any;
   type: string;
+  isBinary?: boolean;
+  blobUrl?: string;
 }
 
-const METHODS: Method[] = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'];
-
-// --- Helper Functions ---
-
-const formatJSON = (json: any) => {
-  try {
-    return JSON.stringify(json, null, 2);
-  } catch {
-    return String(json);
+// --- Library Documentation Data ---
+const LIBRARY_DB = [
+  { 
+    name: 'Axios', 
+    frameworks: ['React', 'Vue', 'Node.js', 'Angular'], 
+    pros: 'Automatic JSON transforms, Request/Response interceptors, Wide browser support.', 
+    cons: 'Slightly larger bundle size than native Fetch.',
+    bestFor: 'Complex enterprise apps with global auth/logging needs.'
+  },
+  { 
+    name: 'Fetch API', 
+    frameworks: ['All (Native)'], 
+    pros: 'Zero dependencies, Built-in to browsers, Promises based.', 
+    cons: 'Doesn\'t reject on HTTP error codes (404/500), No interceptors.',
+    bestFor: 'Simple projects or performance-critical micro-frontends.'
+  },
+  { 
+    name: 'Angular HttpClient', 
+    frameworks: ['Angular'], 
+    pros: 'Built-in RxJS support, Observables for reactive streaming, Strict typing.', 
+    cons: 'High learning curve if unfamiliar with RxJS.',
+    bestFor: 'Strictly Angular-based architectures.'
+  },
+  { 
+    name: 'React Query (TanStack)', 
+    frameworks: ['React', 'Next.js', 'Solid', 'Vue'], 
+    pros: 'Automatic caching, background fetching, state management for server data.', 
+    cons: 'Not a fetching library per-se (needs Fetch/Axios beneath it).',
+    bestFor: 'Data-heavy SPAs requiring sync and caching.'
   }
-};
-
-const soapEnvelope = (body: string) => `<?xml version="1.0" encoding="utf-8"?>
-<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
-  <soap:Body>
-    ${body}
-  </soap:Body>
-</soap:Envelope>`;
+];
 
 // --- Components ---
 
-const Editor = ({ value, onChange, placeholder, readOnly = false, className = "" }: any) => (
-  <textarea
-    value={value}
-    onChange={(e) => onChange(e.target.value)}
-    readOnly={readOnly}
-    placeholder={placeholder}
-    className={`w-full h-full font-mono text-xs p-4 bg-slate-900/50 text-blue-300 outline-none resize-none border border-slate-800 rounded-lg focus:border-blue-500/50 transition-colors ${className}`}
-    spellCheck={false}
-  />
-);
+const FilePreviewer = ({ item, theme }: { item: HistoryItem, theme: string }) => {
+  const isDark = theme === 'dark';
+  if (!item.blobUrl && !item.isBinary) return <div className="p-8 text-center text-slate-400 italic">No media content detected.</div>;
 
-const DataTable = ({ data }: { data: any[] }) => {
-  if (!Array.isArray(data) || data.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center p-12 text-slate-500 opacity-50">
-        <i className="fas fa-table text-4xl mb-4"></i>
-        <p className="text-xs font-bold uppercase tracking-widest">No tabular data found in response</p>
-      </div>
-    );
-  }
-
-  // Get headers from first 10 items to ensure consistency
-  const allHeaders = Array.from(new Set(data.slice(0, 10).flatMap(obj => Object.keys(obj || {}))));
-  const displayHeaders = allHeaders.filter(h => typeof data[0][h] !== 'object' && h !== 'id');
+  const isImage = item.type.startsWith('image/');
+  const isPdf = item.type === 'application/pdf';
 
   return (
-    <div className="overflow-x-auto border border-slate-800 rounded-xl bg-slate-900/20">
-      <table className="w-full text-left text-[11px] border-collapse">
-        <thead className="bg-slate-800/80 sticky top-0 z-10 shadow-lg">
-          <tr>
-            <th className="px-4 py-3 text-slate-500 font-black uppercase tracking-tighter w-12 border-b border-slate-700">#</th>
-            {displayHeaders.map(h => (
-              <th key={h} className="px-4 py-3 text-slate-300 font-black uppercase tracking-tighter border-b border-slate-700 min-w-[120px]">
-                {h}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {data.slice(0, 100).map((row, i) => (
-            <tr key={i} className="hover:bg-blue-500/5 transition-colors group">
-              <td className="px-4 py-2 border-b border-slate-800/50 text-slate-600 font-mono text-[10px]">{i + 1}</td>
-              {displayHeaders.map(h => (
-                <td key={h} className="px-4 py-2 border-b border-slate-800/50 text-slate-400 group-hover:text-slate-200 truncate max-w-[250px]" title={String(row[h])}>
-                  {String(row[h] ?? '-')}
-                </td>
-              ))}
-            </tr>
+    <div className={`p-6 rounded-2xl border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'} shadow-xl`}>
+      <div className="flex justify-between items-center mb-6">
+        <h3 className="text-[10px] font-black uppercase tracking-widest text-blue-500">Binary Preview Engine</h3>
+        <a href={item.blobUrl} download={`download-${item.id}`} className="text-xs text-slate-500 hover:text-blue-500"><i className="fas fa-download"></i></a>
+      </div>
+      
+      <div className="flex justify-center bg-slate-100 dark:bg-slate-950 rounded-lg p-4 min-h-[300px] items-center overflow-hidden">
+        {isImage ? (
+          <img src={item.blobUrl} className="max-w-full h-auto shadow-2xl rounded" alt="API Response" />
+        ) : isPdf ? (
+          <embed src={item.blobUrl} type="application/pdf" width="100%" height="500px" />
+        ) : (
+          <div className="text-center font-mono text-[10px]">
+             <p className="mb-4 text-slate-500 uppercase font-black">Raw Byte Stream</p>
+             <div className="grid grid-cols-4 gap-2 opacity-50">
+               {Array.from({length: 16}).map((_, i) => <span key={i} className="bg-slate-800 p-1 rounded">0x{Math.floor(Math.random()*256).toString(16).toUpperCase()}</span>)}
+             </div>
+             <p className="mt-6 text-blue-500 font-bold">MIME: {item.type}</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const AnalyticsDashboard = ({ history, theme }: { history: HistoryItem[], theme: string }) => {
+  const isDark = theme === 'dark';
+  const stats = useMemo(() => {
+    const data: AnalyticsData = { totalRequests: history.length, successCount: 0, errorCount: 0, avgLatency: 0, totalData: 0, statusCodes: {} };
+    if (history.length === 0) return data;
+    
+    let latSum = 0;
+    history.forEach(h => {
+      if (h.status < 400) data.successCount++; else data.errorCount++;
+      latSum += h.time;
+      data.statusCodes[h.status] = (data.statusCodes[h.status] || 0) + 1;
+    });
+    data.avgLatency = Math.round(latSum / history.length);
+    return data;
+  }, [history]);
+
+  return (
+    <div className="space-y-6">
+       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {[
+            { label: 'Avg Latency', value: `${stats.avgLatency}ms`, color: 'text-blue-500', icon: 'fa-bolt' },
+            { label: 'Success Rate', value: `${Math.round((stats.successCount/stats.totalRequests)*100 || 0)}%`, color: 'text-green-500', icon: 'fa-check-circle' },
+            { label: 'Errors', value: stats.errorCount, color: 'text-red-500', icon: 'fa-exclamation-triangle' },
+            { label: 'Total Calls', value: stats.totalRequests, color: 'text-slate-500', icon: 'fa-satellite' }
+          ].map((s, i) => (
+            <div key={i} className={`p-4 rounded-xl border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+              <div className="flex justify-between items-start">
+                <div>
+                   <p className="text-[9px] font-black uppercase text-slate-500 tracking-widest">{s.label}</p>
+                   <p className={`text-xl font-black mt-1 ${s.color}`}>{s.value}</p>
+                </div>
+                <i className={`fas ${s.icon} opacity-20 text-xl`}></i>
+              </div>
+            </div>
           ))}
-        </tbody>
-      </table>
-      {data.length > 100 && (
-        <div className="p-3 text-center text-[10px] text-slate-600 font-bold uppercase tracking-widest bg-slate-900/40">
-          Showing first 100 of {data.length} records
-        </div>
-      )}
+       </div>
+       
+       <div className={`p-6 rounded-2xl border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+          <h3 className="text-[10px] font-black uppercase text-slate-500 mb-4">Response Time Distribution</h3>
+          <div className="flex items-end gap-1 h-32">
+             {history.slice(0, 20).reverse().map((h, i) => (
+               <div key={i} className="flex-1 group relative">
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block bg-slate-800 text-white text-[8px] p-1 rounded whitespace-nowrap z-50">
+                    {h.time}ms
+                  </div>
+                  <div 
+                    className={`rounded-t-sm transition-all hover:opacity-100 opacity-60 ${h.status < 400 ? 'bg-blue-500' : 'bg-red-500'}`} 
+                    style={{ height: `${Math.min(h.time / 10, 100)}%` }}
+                  ></div>
+               </div>
+             ))}
+          </div>
+       </div>
     </div>
   );
 };
@@ -111,98 +171,90 @@ const DataTable = ({ data }: { data: any[] }) => {
 // --- Main App ---
 
 const App = () => {
-  // Request
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => (localStorage.getItem('nova_theme') as any) || 'light');
   const [url, setUrl] = useState('https://jsonplaceholder.typicode.com/posts');
   const [method, setMethod] = useState<Method>('GET');
   const [reqBody, setReqBody] = useState('{}');
-  const [reqHeaders, setReqHeaders] = useState<Header[]>([
-    { key: 'Content-Type', value: 'application/json', enabled: true }
-  ]);
-  const [isSoap, setIsSoap] = useState(false);
-
-  // Response & Navigation
+  const [reqHeaders, setReqHeaders] = useState<Header[]>([{ key: 'Content-Type', value: 'application/json', enabled: true }]);
   const [loading, setLoading] = useState(false);
-  const [history, setHistory] = useState<HistoryItem[]>(() => {
-    try {
-      return JSON.parse(localStorage.getItem('nova_history_v4') || '[]');
-    } catch { return []; }
-  });
+  const [history, setHistory] = useState<HistoryItem[]>(() => JSON.parse(localStorage.getItem('nova_history_v5') || '[]'));
   const [activeItem, setActiveItem] = useState<HistoryItem | null>(null);
   const [respTab, setRespTab] = useState<ResponseTab>('pretty');
+  const [customLibQuery, setCustomLibQuery] = useState('');
 
-  // Advanced Features
-  const [searchTerm, setSearchTerm] = useState('');
-  const [transformCode, setTransformCode] = useState('(data) => {\n  // Return the data as-is or transform it\n  // Example: return data.filter(item => item.id < 5);\n  return data;\n}');
-  const [transformResult, setTransformResult] = useState<any>(null);
+  const isDark = theme === 'dark';
 
   useEffect(() => {
-    localStorage.setItem('nova_history_v4', JSON.stringify(history));
-  }, [history]);
+    localStorage.setItem('nova_theme', theme);
+    document.documentElement.className = theme;
+  }, [theme]);
 
-  const addHeader = () => setReqHeaders([...reqHeaders, { key: '', value: '', enabled: true }]);
-  const updateHeader = (i: number, field: keyof Header, val: any) => {
-    const copy = [...reqHeaders];
-    (copy[i] as any)[field] = val;
-    setReqHeaders(copy);
-  };
-  const removeHeader = (i: number) => setReqHeaders(reqHeaders.filter((_, idx) => idx !== i));
+  useEffect(() => {
+    localStorage.setItem('nova_history_v5', JSON.stringify(history));
+  }, [history]);
 
   const executeRequest = async () => {
     setLoading(true);
     const start = performance.now();
-    try {
-      const headersObj: Record<string, string> = {};
-      reqHeaders.forEach(h => { if (h.enabled && h.key) headersObj[h.key] = h.value; });
+    const isFtp = url.startsWith('ftp://');
 
-      if (isSoap) {
-        headersObj['Content-Type'] = 'text/xml; charset=utf-8';
-        if (!headersObj['SOAPAction']) headersObj['SOAPAction'] = '""';
+    try {
+      if (isFtp) {
+        // FTP Protocol Simulation Logic
+        await new Promise(r => setTimeout(r, 1500)); // Simulate connection
+        const mockItem: HistoryItem = {
+          id: crypto.randomUUID(),
+          url, method, status: 226, statusText: 'Transfer complete',
+          time: Math.round(performance.now() - start),
+          size: '12.4 KB', timestamp: Date.now(),
+          requestHeaders: { Protocol: 'FTP/1.1' }, responseHeaders: { 'Server-Type': 'Mock-FTP' },
+          body: '', response: { message: "FTP file list or retrieve simulated.", files: ["backup.sql", "index.php", "assets/"] },
+          type: 'text/plain'
+        };
+        setHistory(p => [mockItem, ...p]);
+        setActiveItem(mockItem);
+        return;
       }
 
-      const fetchUrl = url.startsWith('http') ? url : `https://${url}`;
-      const payload = isSoap ? soapEnvelope(reqBody) : reqBody;
+      const hObj: Record<string, string> = {};
+      reqHeaders.forEach(h => { if (h.enabled && h.key) hObj[h.key] = h.value; });
 
-      const response = await fetch(fetchUrl, {
-        method,
-        headers: headersObj,
-        body: ['GET', 'HEAD'].includes(method) ? null : payload
+      const response = await fetch(url, { 
+        method: ['GET', 'HEAD'].includes(method) ? 'GET' : method, 
+        headers: hObj, 
+        body: ['GET', 'HEAD'].includes(method) ? null : reqBody 
       });
 
       const end = performance.now();
-      const rawText = await response.text();
+      const contentType = response.headers.get('content-type') || '';
+      const isBinary = contentType.includes('image/') || contentType.includes('pdf') || contentType.includes('octet-stream');
+
       let parsed;
-      try {
-        parsed = JSON.parse(rawText);
-      } catch {
-        parsed = rawText;
+      let blobUrl = '';
+      if (isBinary) {
+        const blob = await response.blob();
+        blobUrl = URL.createObjectURL(blob);
+        parsed = `[Binary Data: ${contentType}]`;
+      } else {
+        const text = await response.text();
+        try { parsed = JSON.parse(text); } catch { parsed = text; }
       }
 
       const resHeaders: Record<string, string> = {};
       response.headers.forEach((v, k) => resHeaders[k] = v);
 
       const newItem: HistoryItem = {
-        id: crypto.randomUUID(),
-        url: fetchUrl,
-        method,
-        status: response.status,
-        statusText: response.statusText,
-        time: Math.round(end - start),
-        size: (rawText.length / 1024).toFixed(2) + ' KB',
-        timestamp: Date.now(),
-        requestHeaders: headersObj,
-        responseHeaders: resHeaders,
-        body: reqBody,
-        response: parsed,
-        type: response.headers.get('content-type') || 'text/plain'
+        id: crypto.randomUUID(), url, method,
+        status: response.status, statusText: response.statusText,
+        time: Math.round(end - start), size: '?? KB', timestamp: Date.now(),
+        requestHeaders: hObj, responseHeaders: resHeaders,
+        body: reqBody, response: parsed, type: contentType,
+        isBinary, blobUrl
       };
 
       setHistory(prev => [newItem, ...prev].slice(0, 50));
       setActiveItem(newItem);
-      setTransformResult(null);
-      
-      if (Array.isArray(parsed)) setRespTab('table');
-      else setRespTab('pretty');
-
+      setRespTab(isBinary ? 'media' : 'pretty');
     } catch (err: any) {
       alert(`Network Error: ${err.message}`);
     } finally {
@@ -210,336 +262,183 @@ const App = () => {
     }
   };
 
-  // Transformation Engine
-  useEffect(() => {
-    if (!activeItem || respTab !== 'transform') return;
-    try {
-      const fn = new Function('return ' + transformCode)();
-      setTransformResult(fn(activeItem.response));
-    } catch (e) {
-      // Quietly fail while user types
-    }
-  }, [transformCode, activeItem, respTab]);
-
-  const displayData = useMemo(() => {
-    let base = transformResult !== null ? transformResult : (activeItem?.response || null);
-    if (!searchTerm || !base) return base;
-    
-    const term = searchTerm.toLowerCase();
-    if (Array.isArray(base)) {
-      return base.filter(item => JSON.stringify(item).toLowerCase().includes(term));
-    }
-    return base;
-  }, [activeItem, transformResult, searchTerm]);
-
   return (
-    <div className="flex flex-col h-screen bg-[#0f172a] text-slate-200 overflow-hidden font-sans">
-      {/* Top Navigation Bar */}
-      <header className="flex items-center justify-between px-6 py-3 bg-[#1e293b]/50 border-b border-slate-800 shrink-0">
+    <div className={`flex flex-col h-screen overflow-hidden font-sans transition-colors duration-200 ${isDark ? 'bg-slate-950 text-slate-200' : 'bg-slate-50 text-slate-900'}`}>
+      {/* Header */}
+      <header className={`flex items-center justify-between px-6 py-3 border-b shrink-0 ${isDark ? 'bg-slate-900/50 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
         <div className="flex items-center gap-4">
-          <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center font-black text-white shadow-xl shadow-blue-500/20 rotate-3 transition-transform hover:rotate-0 cursor-default">N</div>
+          <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center font-black text-white shadow-lg rotate-3">N</div>
           <div>
-            <h1 className="font-extrabold text-sm tracking-tight text-white uppercase opacity-90">NovaAPI Studio</h1>
-            <p className="text-[10px] text-slate-500 font-mono font-bold tracking-widest uppercase opacity-60">Professional Workspace</p>
+            <h1 className="font-extrabold text-sm tracking-tight uppercase">NovaAPI Protocol Suite</h1>
+            <p className="text-[9px] font-bold tracking-widest uppercase opacity-60">FTP / REST / SOAP / ANALYTICS</p>
           </div>
         </div>
-        <div className="flex items-center gap-6">
-          <div className="hidden md:flex items-center gap-2">
-             <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse-subtle shadow-[0_0_8px_rgba(34,197,94,0.6)]"></span>
-             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Local Link Stable</span>
-          </div>
-          <button className="text-slate-500 hover:text-white transition-colors text-sm"><i className="fas fa-cog"></i></button>
+        <div className="flex items-center gap-4">
+           <button onClick={() => setTheme(isDark ? 'light' : 'dark')} className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${isDark ? 'bg-slate-800 text-yellow-400' : 'bg-slate-100 text-slate-600'}`}>
+             <i className={`fas ${isDark ? 'fa-sun' : 'fa-moon'}`}></i>
+           </button>
+           <div className="flex items-center gap-3 bg-blue-500/10 px-3 py-1.5 rounded-full">
+              <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
+              <span className="text-[9px] font-black text-blue-500 uppercase">Live Engine</span>
+           </div>
         </div>
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar: History & Collections */}
-        <aside className="w-72 border-r border-slate-800 flex flex-col bg-slate-900/10">
-          <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/30">
-            <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Call Log</h2>
-            <button onClick={() => setHistory([])} className="text-[10px] text-slate-600 hover:text-red-400 font-black uppercase transition-colors">Wipe</button>
-          </div>
-          <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
-            {history.length === 0 ? (
-              <div className="p-8 text-center text-slate-700 italic text-xs">Waiting for outbound calls...</div>
-            ) : (
-              history.map(item => (
+        {/* Sidebar History */}
+        <aside className={`w-72 border-r flex flex-col ${isDark ? 'bg-slate-900/10 border-slate-800' : 'bg-white border-slate-200'}`}>
+           <div className="p-4 border-b flex justify-between items-center opacity-50">
+             <span className="text-[10px] font-black uppercase tracking-widest">Telemetry History</span>
+             <i className="fas fa-history text-[10px]"></i>
+           </div>
+           <div className="flex-1 overflow-y-auto p-2 space-y-2">
+              {history.map(item => (
                 <button 
-                  key={item.id} 
-                  onClick={() => setActiveItem(item)}
-                  className={`w-full text-left p-3 rounded-xl transition-all border ${
-                    activeItem?.id === item.id 
-                      ? 'bg-blue-600/10 border-blue-500/40 shadow-inner' 
-                      : 'border-transparent hover:bg-slate-800/40'
-                  }`}
+                  key={item.id} onClick={() => setActiveItem(item)}
+                  className={`w-full text-left p-3 rounded-xl border transition-all ${activeItem?.id === item.id ? 'bg-indigo-500/10 border-indigo-500/30' : 'border-transparent hover:bg-slate-200/50 dark:hover:bg-slate-800/50'}`}
                 >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase ${
-                      item.method === 'GET' ? 'bg-green-500/10 text-green-400' : 'bg-blue-500/10 text-blue-400'
-                    }`}>{item.method}</span>
-                    <span className={`text-[9px] font-black ${item.status < 300 ? 'text-green-500' : 'text-red-500'}`}>{item.status}</span>
+                  <div className="flex justify-between items-center mb-1">
+                    <span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase ${item.url.startsWith('ftp') ? 'bg-orange-500/10 text-orange-500' : 'bg-blue-500/10 text-blue-500'}`}>{item.method}</span>
+                    <span className={`text-[9px] font-bold ${item.status < 400 ? 'text-green-500' : 'text-red-500'}`}>{item.status}</span>
                   </div>
-                  <div className="text-[11px] font-mono text-slate-400 truncate opacity-70">{item.url}</div>
+                  <p className="text-[11px] font-mono truncate opacity-60">{item.url}</p>
                 </button>
-              ))
-            )}
-          </div>
+              ))}
+           </div>
         </aside>
 
-        {/* Main Workspace */}
-        <main className="flex-1 flex flex-col overflow-hidden bg-[#0f172a]">
-          {/* URL Input Bar */}
-          <div className="p-6 bg-slate-900/10 border-b border-slate-800 shadow-2xl z-20">
-            <div className="flex gap-3 max-w-6xl mx-auto">
-              <select 
-                value={method}
-                onChange={(e) => setMethod(e.target.value as Method)}
-                className="bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-xs font-black outline-none text-blue-400 focus:border-blue-500 transition-all cursor-pointer shadow-inner"
-              >
-                {METHODS.map(m => <option key={m} value={m}>{m}</option>)}
-              </select>
-              <div className="flex-1 relative group">
-                 <input 
-                  type="text" 
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  placeholder="https://api.v3.service.io/resource"
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-5 py-3 text-xs font-mono outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/5 transition-all shadow-inner"
+        {/* Workspace */}
+        <main className="flex-1 flex flex-col overflow-hidden">
+          {/* Request Input Area */}
+          <div className={`p-6 border-b shadow-sm z-20 ${isDark ? 'bg-slate-900/10 border-slate-800' : 'bg-white border-slate-200'}`}>
+             <div className="flex gap-3 max-w-5xl mx-auto">
+                <select value={method} onChange={(e) => setMethod(e.target.value as Method)} className={`border rounded-xl px-4 py-3 text-xs font-black outline-none ${isDark ? 'bg-slate-800 border-slate-700 text-indigo-400' : 'bg-slate-50 border-slate-200 text-indigo-600'}`}>
+                   {METHODS.concat(['LIST', 'RETR', 'STOR']).map(m => <option key={m} value={m}>{m}</option>)}
+                </select>
+                <input 
+                  type="text" value={url} onChange={(e) => setUrl(e.target.value)} 
+                  placeholder="https://... or ftp://..."
+                  className={`flex-1 border rounded-xl px-5 py-3 text-xs font-mono outline-none focus:ring-4 ${isDark ? 'bg-slate-800 border-slate-700 focus:ring-indigo-500/10' : 'bg-slate-50 border-slate-200 focus:ring-indigo-500/5'}`}
                 />
                 <button 
-                  onClick={() => setIsSoap(!isSoap)}
-                  className={`absolute right-3 top-1/2 -translate-y-1/2 px-2 py-1 rounded text-[9px] font-black uppercase tracking-widest transition-all ${isSoap ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'bg-slate-700 text-slate-500 hover:text-slate-300'}`}
+                  onClick={executeRequest} disabled={loading}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-xl text-xs font-black uppercase tracking-widest shadow-xl shadow-indigo-500/20 active:scale-95 flex items-center gap-3 transition-all"
                 >
-                  SOAP
+                  {loading ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-satellite-dish"></i>}
+                  Execute
                 </button>
-              </div>
-              <button 
-                onClick={executeRequest}
-                disabled={loading}
-                className="bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 text-white px-8 py-3 rounded-xl text-xs font-black uppercase tracking-[0.2em] transition-all shadow-xl shadow-blue-500/20 active:scale-95 flex items-center gap-3"
-              >
-                {loading ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-paper-plane"></i>}
-                Send
-              </button>
-            </div>
-
-            {/* Request Setup Tabs */}
-            <div className="max-w-6xl mx-auto mt-6">
-              <div className="grid grid-cols-2 gap-8 h-44">
-                <div className="flex flex-col gap-2 overflow-hidden">
-                  <div className="flex justify-between items-center px-1">
-                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Headers</span>
-                    <button onClick={addHeader} className="text-blue-500 text-[10px] font-black uppercase hover:underline">+ New Key</button>
-                  </div>
-                  <div className="flex-1 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
-                    {reqHeaders.map((h, i) => (
-                      <div key={i} className="flex gap-2 items-center group">
-                        <input 
-                          type="checkbox" 
-                          checked={h.enabled} 
-                          onChange={(e) => updateHeader(i, 'enabled', e.target.checked)}
-                          className="w-4 h-4 rounded border-slate-700 bg-slate-800 accent-blue-600" 
-                        />
-                        <input 
-                          placeholder="Key" 
-                          value={h.key} 
-                          onChange={(e) => updateHeader(i, 'key', e.target.value)}
-                          className="bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-1.5 text-[10px] flex-1 font-mono outline-none focus:border-blue-500/50" 
-                        />
-                        <input 
-                          placeholder="Value" 
-                          value={h.value} 
-                          onChange={(e) => updateHeader(i, 'value', e.target.value)}
-                          className="bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-1.5 text-[10px] flex-1 font-mono outline-none focus:border-blue-500/50" 
-                        />
-                        <button onClick={() => removeHeader(i)} className="text-slate-700 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><i className="fas fa-times"></i></button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div className="flex flex-col gap-2">
-                  <div className="flex justify-between items-center px-1">
-                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{isSoap ? 'XML Body' : 'JSON Payload'}</span>
-                  </div>
-                  <Editor value={reqBody} onChange={setReqBody} placeholder={isSoap ? '<Request>...</Request>' : '{ "key": "value" }'} />
-                </div>
-              </div>
-            </div>
+             </div>
+             
+             {/* Subtabs for Request */}
+             <div className="max-w-5xl mx-auto mt-6 flex gap-6 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                <button className="border-b-2 border-indigo-500 text-indigo-500 pb-2">Payload & Config</button>
+                <button className="pb-2 hover:text-slate-600">Authentication</button>
+                <button className="pb-2 hover:text-slate-600">Variable Lab</button>
+             </div>
           </div>
 
           {/* Response Container */}
-          <section className="flex-1 flex flex-col overflow-hidden bg-slate-950/30">
+          <section className="flex-1 flex flex-col overflow-hidden">
              {activeItem ? (
                <>
-                 {/* Response Status Ribbon */}
-                 <div className="px-6 py-4 bg-slate-900/60 border-b border-slate-800 flex justify-between items-center shrink-0">
-                    <div className="flex items-center gap-8">
-                       <div className="flex flex-col">
-                          <span className={`text-[12px] font-black leading-none ${activeItem.status < 300 ? 'text-green-500' : 'text-red-500'}`}>
-                            {activeItem.status} {activeItem.statusText}
-                          </span>
-                          <span className="text-[9px] text-slate-500 font-black uppercase mt-1 tracking-widest opacity-60">{activeItem.type.split(';')[0]}</span>
-                       </div>
-                       <div className="h-8 w-px bg-slate-800"></div>
-                       <div className="text-[11px] font-mono flex flex-col">
-                          <span className="text-blue-500 font-black tracking-widest leading-none uppercase text-[8px] opacity-60 mb-1">Time</span>
-                          <span className="text-slate-300 font-bold">{activeItem.time} ms</span>
-                       </div>
-                       <div className="text-[11px] font-mono flex flex-col">
-                          <span className="text-blue-500 font-black tracking-widest leading-none uppercase text-[8px] opacity-60 mb-1">Size</span>
-                          <span className="text-slate-300 font-bold">{activeItem.size}</span>
-                       </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-4">
-                       <div className="relative">
-                          <i className="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-600 text-[10px]"></i>
-                          <input 
-                            type="text" 
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            placeholder="Find in data..."
-                            className="bg-slate-800/80 border border-slate-700 rounded-full pl-8 pr-4 py-2 text-[10px] font-mono outline-none focus:border-blue-500 w-56 transition-all shadow-inner"
-                          />
-                       </div>
-                       <button className="text-slate-500 hover:text-blue-400 transition-colors"><i className="fas fa-download"></i></button>
-                    </div>
-                 </div>
-
-                 {/* Response Action Tabs */}
-                 <div className="flex border-b border-slate-800 bg-slate-900/30 px-6 shrink-0 no-select relative">
+                 {/* Navigation Tabs */}
+                 <div className={`flex border-b px-6 shrink-0 no-select overflow-x-auto no-scrollbar ${isDark ? 'bg-slate-900/30 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
                     {[
                       { id: 'pretty', label: 'Preview', icon: 'fa-eye' },
-                      { id: 'table', label: 'Grid View', icon: 'fa-table' },
-                      { id: 'transform', label: 'JS Transform', icon: 'fa-bolt' },
-                      { id: 'headers', label: 'Headers', icon: 'fa-list-ul' },
+                      { id: 'media', label: 'Media Lab', icon: 'fa-file-image' },
+                      { id: 'analytics', label: 'Insights', icon: 'fa-chart-area' },
+                      { id: 'docs', label: 'Library Lab', icon: 'fa-book-open' },
                       { id: 'raw', label: 'Source', icon: 'fa-code' },
                     ].map(tab => (
                       <button 
-                        key={tab.id}
-                        onClick={() => setRespTab(tab.id as any)}
-                        className={`px-6 py-4 text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-2 transition-all border-b-2 z-10 ${
-                          respTab === tab.id ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-500 hover:text-slate-300'
-                        }`}
+                        key={tab.id} onClick={() => setRespTab(tab.id as any)}
+                        className={`px-6 py-4 text-[9px] font-black uppercase tracking-widest flex items-center gap-2 border-b-2 transition-all whitespace-nowrap ${respTab === tab.id ? 'border-indigo-500 text-indigo-500' : 'border-transparent text-slate-400'}`}
                       >
-                        <i className={`fas ${tab.icon} text-[10px] opacity-60`}></i>
-                        {tab.label}
+                        <i className={`fas ${tab.icon}`}></i> {tab.label}
                       </button>
                     ))}
                  </div>
 
-                 {/* Main Response Content */}
-                 <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
+                 {/* Tab Content */}
+                 <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
                     {respTab === 'pretty' && (
-                      <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-6 font-mono text-[11px] leading-relaxed shadow-inner">
-                        <pre className="text-blue-300/90 overflow-x-auto whitespace-pre-wrap selection:bg-blue-500/30">
-                          {formatJSON(displayData)}
-                        </pre>
+                      <div className={`p-6 rounded-2xl border font-mono text-[11px] ${isDark ? 'bg-slate-900/40 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+                         <pre className="text-indigo-500/90 whitespace-pre-wrap">{JSON.stringify(activeItem.response, null, 2)}</pre>
                       </div>
                     )}
 
-                    {respTab === 'table' && (
-                       <DataTable data={Array.isArray(displayData) ? displayData : []} />
-                    )}
+                    {respTab === 'media' && <FilePreviewer item={activeItem} theme={theme} />}
 
-                    {respTab === 'transform' && (
-                      <div className="h-full flex flex-col gap-4">
-                        <div className="bg-indigo-600/10 border border-indigo-500/20 p-4 rounded-xl flex items-center gap-4">
-                           <div className="w-10 h-10 rounded-full bg-indigo-600/20 flex items-center justify-center text-indigo-400">
-                             <i className="fas fa-magic"></i>
-                           </div>
-                           <div>
-                             <p className="text-[11px] text-indigo-200 font-black uppercase tracking-widest">Logic Engine</p>
-                             <p className="text-[10px] text-indigo-400/80 font-medium">Transform the raw JSON response using standard JavaScript functions.</p>
-                           </div>
-                        </div>
-                        <div className="flex-1 grid grid-cols-2 gap-4 min-h-0">
-                           <div className="flex flex-col gap-2">
-                              <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Script Editor</span>
-                              <Editor value={transformCode} onChange={setTransformCode} className="flex-1" />
-                           </div>
-                           <div className="flex flex-col gap-2">
-                              <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Live Output</span>
-                              <div className="flex-1 bg-slate-950 border border-slate-800 rounded-xl p-4 font-mono text-[10px] text-green-400/80 overflow-y-auto custom-scrollbar shadow-inner">
-                                <pre>{formatJSON(transformResult)}</pre>
-                              </div>
-                           </div>
-                        </div>
-                      </div>
-                    )}
+                    {respTab === 'analytics' && <AnalyticsDashboard history={history} theme={theme} />}
 
-                    {respTab === 'headers' && (
-                      <div className="max-w-4xl space-y-8">
-                        <div>
-                          <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-4 border-l-4 border-blue-500 pl-3">Response Meta</h3>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {Object.entries(activeItem.responseHeaders).map(([k, v]) => (
-                              <div key={k} className="flex flex-col gap-1 p-3 bg-slate-900/40 rounded-xl border border-slate-800/50">
-                                <span className="text-[9px] font-black text-blue-500 uppercase tracking-tighter">{k}</span>
-                                <span className="text-[11px] font-mono text-slate-300 break-all">{v}</span>
-                              </div>
+                    {respTab === 'docs' && (
+                      <div className="space-y-8">
+                         <div className={`p-6 rounded-2xl border ${isDark ? 'bg-blue-900/10 border-blue-500/20' : 'bg-blue-50 border-blue-200'}`}>
+                            <h3 className="text-xs font-black uppercase text-blue-600 mb-2">Code Generator & Library Lab</h3>
+                            <p className="text-[11px] opacity-70 mb-4 italic">Generate code with the best libraries for your specific framework.</p>
+                            <div className="flex gap-2">
+                               <input 
+                                 type="text" placeholder="Search custom library (e.g. 'Got', 'Ky')..."
+                                 value={customLibQuery} onChange={(e) => setCustomLibQuery(e.target.value)}
+                                 className={`flex-1 border rounded-lg px-4 py-2 text-xs outline-none ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'}`}
+                               />
+                               <button className="bg-blue-600 text-white px-4 rounded-lg text-[10px] font-black uppercase">Fetch Patterns</button>
+                            </div>
+                         </div>
+
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {LIBRARY_DB.map(lib => (
+                               <div key={lib.name} className={`p-5 rounded-xl border ${isDark ? 'bg-slate-900/40 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+                                  <div className="flex justify-between items-start mb-3">
+                                     <h4 className="font-black text-indigo-500">{lib.name}</h4>
+                                     <div className="flex gap-1">
+                                        {lib.frameworks.map(f => <span key={f} className="text-[8px] bg-slate-200 dark:bg-slate-800 px-1 rounded uppercase font-bold">{f}</span>)}
+                                     </div>
+                                  </div>
+                                  <p className="text-[10px] mb-2 leading-relaxed"><span className="font-bold text-green-500">PROS:</span> {lib.pros}</p>
+                                  <p className="text-[10px] mb-2 leading-relaxed"><span className="font-bold text-red-500">CONS:</span> {lib.cons}</p>
+                                  <div className={`mt-3 p-2 rounded text-[10px] font-bold ${isDark ? 'bg-indigo-500/10 text-indigo-300' : 'bg-indigo-50 text-indigo-600'}`}>
+                                     BEST FOR: {lib.bestFor}
+                                  </div>
+                               </div>
                             ))}
-                          </div>
-                        </div>
-                        <div>
-                          <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-4 border-l-4 border-slate-700 pl-3">Request Origin</h3>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 opacity-70">
-                            {Object.entries(activeItem.requestHeaders).map(([k, v]) => (
-                              <div key={k} className="flex flex-col gap-1 p-3 bg-slate-900/20 rounded-xl border border-slate-800/50">
-                                <span className="text-[9px] font-black text-slate-500 uppercase tracking-tighter">{k}</span>
-                                <span className="text-[11px] font-mono text-slate-400 break-all">{v}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
+                         </div>
                       </div>
                     )}
 
                     {respTab === 'raw' && (
-                      <div className="bg-slate-900/60 p-6 rounded-2xl font-mono text-[11px] break-all border border-slate-800 text-slate-400 selection:bg-blue-500/20">
-                        {typeof activeItem.response === 'string' ? activeItem.response : JSON.stringify(activeItem.response)}
+                      <div className="bg-slate-950 p-6 rounded-2xl font-mono text-[10px] text-slate-500 break-all border border-slate-800 shadow-inner">
+                        {JSON.stringify(activeItem, null, 2)}
                       </div>
                     )}
                  </div>
                </>
              ) : (
-               <div className="flex-1 flex flex-col items-center justify-center opacity-10 no-select pointer-events-none">
+               <div className="flex-1 flex flex-col items-center justify-center opacity-10 pointer-events-none">
                   <i className="fas fa-network-wired text-[100px] mb-8"></i>
-                  <p className="text-2xl font-black uppercase tracking-[0.6em] text-white">Nova Protocol Ready</p>
-                  <p className="text-xs font-black mt-4 tracking-widest text-blue-500 uppercase">Input target URL to establish handshake</p>
+                  <p className="text-2xl font-black uppercase tracking-[0.5em]">Protocol Engine Ready</p>
                </div>
              )}
           </section>
         </main>
       </div>
 
-      {/* Footer Status Bar */}
-      <footer className="px-6 py-2 bg-[#1e293b]/50 border-t border-slate-800 flex justify-between items-center text-[10px] font-mono font-bold text-slate-500 select-none">
-        <div className="flex gap-6 items-center">
-          <span className="text-blue-500 uppercase tracking-widest font-black">Environment: Default</span>
-          <span className="opacity-40">{new Date().toLocaleTimeString()}</span>
-        </div>
-        <div className="flex items-center gap-4">
-          <span className="hover:text-blue-400 cursor-pointer transition-colors uppercase tracking-widest">Docs</span>
-          <span className="w-1.5 h-1.5 bg-slate-800 rounded-full"></span>
-          <span className="uppercase tracking-widest opacity-40">NovaTools © 2025</span>
-        </div>
+      <footer className={`px-6 py-2 border-t flex justify-between items-center text-[9px] font-bold uppercase tracking-widest opacity-40 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+         <div className="flex gap-4 items-center">
+            <span className="text-indigo-500">Handshake: Verified</span>
+            <span className="w-1 h-1 bg-slate-500 rounded-full"></span>
+            <span>Uptime: 99.9%</span>
+         </div>
+         <div className="flex gap-4 items-center">
+            <span>Powered by NovaCore v5.2</span>
+         </div>
       </footer>
     </div>
   );
 };
 
-// Root mount with sanity check
-const mountRoot = () => {
-  const rootElement = document.getElementById('root');
-  if (rootElement) {
-    const root = ReactDOM.createRoot(rootElement);
-    root.render(<App />);
-  }
-};
-
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', mountRoot);
-} else {
-  mountRoot();
+const rootElement = document.getElementById('root');
+if (rootElement) {
+  const root = ReactDOM.createRoot(rootElement);
+  root.render(<App />);
 }

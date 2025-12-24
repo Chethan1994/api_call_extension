@@ -10,7 +10,7 @@ interface AuthModalProps {
 
 const SUPER_USER_EMAIL = 'chethansg4@gmail.com';
 
-export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onAuth, theme = 'dark' }) => {
+export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onAuth, theme = 'light' }) => {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

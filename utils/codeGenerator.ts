@@ -5,19 +5,114 @@ export const generateLocalCode = (config: RequestConfig, language: string): stri
   const { url, method, headers, body } = config;
   const enabledHeaders = headers.filter(h => h.enabled && h.key);
   const headerObj = enabledHeaders.reduce((acc, h) => ({ ...acc, [h.key]: h.value }), {});
-  const safeBody = body || '{}';
-  
-  switch (language) {
-    case 'curl': {
-      let cmd = `curl --location --request ${method} '${url}'`;
-      enabledHeaders.forEach(h => {
-        cmd += ` \\\n--header '${h.key}: ${h.value}'`;
-      });
-      if (body && method !== 'GET') {
-        cmd += ` \\\n--data-raw '${body.replace(/'/g, "'\\''")}'`;
-      }
-      return cmd;
+  const isFtp = url.startsWith('ftp://');
+
+  if (isFtp) {
+    switch(language) {
+      case 'node-ftp':
+        return `const ftp = require("basic-ftp")
+
+async function example() {
+    const client = new ftp.Client()
+    client.ftp.verbose = true
+    try {
+        await client.access({
+            host: "${new URL(url).hostname}",
+            user: "anonymous",
+            password: "password",
+            secure: true
+        })
+        console.log(await client.list())
+        await client.downloadTo("local-file.txt", "${new URL(url).pathname}")
     }
+    catch(err) {
+        console.log(err)
+    }
+    client.close()
+}
+
+example()`;
+      default:
+        return "// FTP operations typically require a specialized client library (e.g., 'basic-ftp' in Node.js).";
+    }
+  }
+
+  switch (language) {
+    case 'react-axios':
+      return `import React, { useEffect, useState } from 'react';
+import axios from 'axios';
+
+const ApiComponent = () => {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const response = await axios({
+          url: '${url}',
+          method: '${method}',
+          headers: ${JSON.stringify(headerObj, null, 2)},
+          ${body && method !== 'GET' ? `data: ${body}` : ''}
+        });
+        setData(response.data);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
+
+  if (loading) return <div>Loading...</div>;
+  return <div>{JSON.stringify(data)}</div>;
+};
+
+export default ApiComponent;`;
+
+    case 'angular-http':
+      return `import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { Component, OnInit } from '@angular/core';
+
+@Component({
+  selector: 'app-api-call',
+  template: '<div *ngIf="data">{{ data | json }}</div>'
+})
+export class ApiCallComponent implements OnInit {
+  data: any;
+
+  constructor(private http: HttpClient) {}
+
+  ngOnInit() {
+    const headers = new HttpHeaders(${JSON.stringify(headerObj, null, 2)});
+    this.http.request('${method}', '${url}', {
+      headers,
+      ${body && method !== 'GET' ? `body: ${body}` : ''}
+    }).subscribe(response => {
+      this.data = response;
+    });
+  }
+}`;
+
+    case 'nextjs-server':
+      return `// Next.js Server Action
+'use server'
+
+export async function fetchData() {
+  const response = await fetch('${url}', {
+    method: '${method}',
+    headers: ${JSON.stringify(headerObj, null, 2)},
+    ${body && method !== 'GET' ? `body: ${JSON.stringify(body)}` : ''},
+    cache: 'no-store' // or 'force-cache'
+  });
+
+  if (!response.ok) throw new Error('Failed to fetch data');
+  return response.json();
+}
+
+// In your Server Component:
+// const data = await fetchData();`;
 
     case 'js-fetch':
       return `fetch("${url}", {
@@ -29,180 +124,7 @@ export const generateLocalCode = (config: RequestConfig, language: string): stri
 .then(result => console.log(result))
 .catch(error => console.error('Error:', error));`;
 
-    case 'ts-fetch':
-      return `interface RequestHeaders {
-  [key: string]: string;
-}
-
-const headers: RequestHeaders = ${JSON.stringify(headerObj, null, 2)};
-
-async function makeRequest<T>(): Promise<T | void> {
-  try {
-    const response = await fetch("${url}", {
-      method: "${method}",
-      headers,
-      ${body && method !== 'GET' ? `body: ${JSON.stringify(body)}` : ''}
-    });
-    
-    if (!response.ok) {
-      throw new Error(\`HTTP error! status: \${response.status}\`);
-    }
-
-    return await response.json() as T;
-  } catch (error) {
-    console.error('Fetch error:', error);
-  }
-}
-
-makeRequest().then(data => console.log(data));`;
-
-    case 'js-axios':
-      return `const axios = require('axios');
-
-const config = {
-  method: '${method.toLowerCase()}',
-  url: '${url}',
-  headers: ${JSON.stringify(headerObj, null, 2)},
-  ${body && method !== 'GET' ? `data: ${body}` : ''}
-};
-
-axios(config)
-.then(response => {
-  console.log(JSON.stringify(response.data));
-})
-.catch(error => {
-  console.log(error);
-});`;
-
-    case 'ts-axios':
-      return `import axios, { AxiosRequestConfig, AxiosResponse } from 'axios';
-
-const config: AxiosRequestConfig = {
-  method: '${method.toLowerCase()}',
-  url: '${url}',
-  headers: ${JSON.stringify(headerObj, null, 2)},
-  ${body && method !== 'GET' ? `data: ${body}` : ''}
-};
-
-axios(config)
-  .then((response: AxiosResponse) => {
-    console.log(response.data);
-  })
-  .catch((error) => {
-    console.error(error);
-  });`;
-
-    case 'node-axios':
-      return `const axios = require('axios');
-
-(async () => {
-  try {
-    const response = await axios({
-      method: '${method.toLowerCase()}',
-      url: '${url}',
-      headers: ${JSON.stringify(headerObj, null, 2)},
-      ${body && method !== 'GET' ? `data: ${body}` : ''}
-    });
-    console.log(response.data);
-  } catch (error) {
-    console.error('Error executing request:', error.message);
-  }
-})();`;
-
-    case 'node-https': {
-      const parsedUrl = new URL(url);
-      return `const https = require('https');
-
-const options = {
-  hostname: '${parsedUrl.hostname}',
-  port: 443,
-  path: '${parsedUrl.pathname}${parsedUrl.search}',
-  method: '${method}',
-  headers: ${JSON.stringify(headerObj, null, 2)}
-};
-
-const req = https.request(options, (res) => {
-  let data = '';
-
-  res.on('data', (chunk) => {
-    data += chunk;
-  });
-
-  res.on('end', () => {
-    console.log('Response:', data);
-  });
-});
-
-req.on('error', (e) => {
-  console.error('Problem with request:', e.message);
-});
-
-${body && method !== 'GET' ? `req.write(${JSON.stringify(body)});` : ''}
-req.end();`;
-    }
-
-    case 'python-requests': {
-      return `import requests
-import json
-
-url = "${url}"
-payload = ${body ? body : 'None'}
-headers = ${JSON.stringify(headerObj, null, 2)}
-
-response = requests.request("${method}", url, headers=headers, data=payload)
-print(response.text)`;
-    }
-
-    case 'go-native': {
-      return `package main
-
-import (
-  "fmt"
-  "strings"
-  "net/http"
-  "io/ioutil"
-)
-
-func main() {
-  url := "${url}"
-  method := "${method}"
-  payload := strings.NewReader(\`${body}\`)
-
-  client := &http.Client {}
-  req, _ := http.NewRequest(method, url, payload)
-
-  ${enabledHeaders.map(h => `req.Header.Add("${h.key}", "${h.value}")`).join('\n  ')}
-
-  res, _ := client.Do(req)
-  defer res.Body.Close()
-
-  body, _ := ioutil.ReadAll(res.Body)
-  fmt.Println(string(body))
-}`;
-    }
-
-    case 'java-okhttp': {
-      return `import okhttp3.*;
-
-public class Main {
-  public static void main(String[] args) throws Exception {
-    OkHttpClient client = new OkHttpClient().newBuilder().build();
-    MediaType mediaType = MediaType.parse("application/json");
-    ${method !== 'GET' ? `RequestBody body = RequestBody.create(mediaType, "${body.replace(/"/g, "\\\"")}");` : 'RequestBody body = null;'}
-    
-    Request request = new Request.Builder()
-      .url("${url}")
-      .method("${method}", body)
-      ${enabledHeaders.map(h => `.addHeader("${h.key}", "${h.value}")`).join('\n      ')}
-      .build();
-      
-    Response response = client.newCall(request).execute();
-    System.out.println(response.body().string());
-  }
-}`;
-    }
-
     default:
-      return "// Language not supported";
+      return "// Code template for this configuration is being generated...";
   }
 };

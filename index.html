@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -10,11 +11,12 @@
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
         
         :root {
-            --bg-primary: #0f172a;
-            --bg-secondary: #1e293b;
-            --border-color: #334155;
-            --text-main: #f8fafc;
-            --accent: #3b82f6;
+            /* Default Light Theme Variables */
+            --bg-primary: #f8fafc;
+            --bg-secondary: #ffffff;
+            --border-color: #e2e8f0;
+            --text-main: #0f172a;
+            --accent: #2563eb;
         }
 
         body {
@@ -32,18 +34,21 @@
         }
 
         ::-webkit-scrollbar {
-            width: 6px;
-            height: 6px;
+            width: 8px;
+            height: 8px;
         }
         ::-webkit-scrollbar-track {
-            background: rgba(0,0,0,0.1);
+            background: transparent;
         }
         ::-webkit-scrollbar-thumb {
-            background: #475569;
+            background: #cbd5e1;
             border-radius: 10px;
+            border: 2px solid transparent;
+            background-clip: content-box;
         }
         ::-webkit-scrollbar-thumb:hover {
-            background: #64748b;
+            background: #94a3b8;
+            background-clip: content-box;
         }
 
         .no-select {
@@ -56,7 +61,6 @@
             flex-direction: column;
         }
 
-        /* Animations for UI feedback */
         @keyframes pulse-subtle {
             0%, 100% { opacity: 1; }
             50% { opacity: 0.7; }
@@ -64,28 +68,16 @@
         .animate-pulse-subtle {
             animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
         }
-        
-        /* Tab transitions */
-        .tab-indicator {
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        .response-match {
-            background-color: rgba(59, 130, 246, 0.3);
-            border-radius: 2px;
-            padding: 0 2px;
-        }
     </style>
-    <!-- Import Map for ESM usage in browser -->
     <script type="importmap">
 {
   "imports": {
     "react": "https://esm.sh/react@19.0.0",
     "react-dom": "https://esm.sh/react-dom@19.0.0",
     "react-dom/client": "https://esm.sh/react-dom@19.0.0/client",
+    "jszip": "https://esm.sh/jszip@^3.10.1",
     "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
     "react/": "https://esm.sh/react@^19.2.3/",
-    "jszip": "https://esm.sh/jszip@^3.10.1",
     "@capacitor/cli": "https://esm.sh/@capacitor/cli@^8.0.0"
   }
 }
@@ -94,7 +86,6 @@
 </head>
 <body>
     <div id="root"></div>
-    <!-- Script error fix: Explicitly set data-type="module" for Babel to handle ES imports -->
     <script type="text/babel" data-type="module" data-presets="typescript,react" src="index.tsx"></script>
 </body>
 </html>
