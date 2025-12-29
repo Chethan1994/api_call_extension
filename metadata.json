@@ -1,5 +1,7 @@
 {
   "name": "NovaAPI - Advanced API Client",
-  "description": "A high-performance REST and SOAP API client with intelligent response filtering, sorting, and AI-powered code generation.",
-  "requestFramePermissions": []
+  "description": "Professional API client with Dual-Storage and Production Master collection sharing.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
 }
